@@ -18,7 +18,7 @@ export default function LoginPage() {
         <div style={{
             width: '100vw',
             height: '100vh',
-            background: '#1e1f22',
+            background: '#0d0e10',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -56,7 +56,7 @@ export default function LoginPage() {
                 transition={{ type: 'spring', damping: 20 }}
                 style={{
                     width: '480px',
-                    background: '#313338',
+                    background: '#1a1b1e',
                     borderRadius: '8px',
                     boxShadow: '0 2px 10px rgba(0,0,0,0.4)',
                     padding: '32px',

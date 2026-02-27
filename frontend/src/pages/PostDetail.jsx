@@ -57,7 +57,7 @@ export default function PostDetail() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '12px',
-                background: '#313338',
+                background: '#1a1b1e',
                 minHeight: '48px',
             }}>
                 <motion.button

@@ -14,7 +14,7 @@ export default function ServerBar() {
             width: '72px',
             minWidth: '72px',
             height: '100vh',
-            background: '#1e1f22',
+            background: '#0d0e10',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -33,7 +33,7 @@ export default function ServerBar() {
                     borderRadius: isActive('/channels') ? '16px' : '24px',
                     background: isActive('/channels')
                         ? 'linear-gradient(135deg, #5865f2, #7289da)'
-                        : '#313338',
+                        : '#1a1b1e',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -64,7 +64,7 @@ export default function ServerBar() {
             <div style={{
                 width: '32px',
                 height: '2px',
-                background: '#35373c',
+                background: '#252729',
                 borderRadius: '1px',
                 margin: '4px 0',
             }} />
@@ -86,7 +86,7 @@ export default function ServerBar() {
                             width: '48px',
                             height: '48px',
                             borderRadius: active ? '16px' : '24px',
-                            background: active ? '#5865f2' : '#313338',
+                            background: active ? '#5865f2' : '#1a1b1e',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -117,7 +117,7 @@ export default function ServerBar() {
             <div style={{
                 width: '32px',
                 height: '2px',
-                background: '#35373c',
+                background: '#252729',
                 borderRadius: '1px',
                 margin: '4px 0',
             }} />
@@ -132,7 +132,7 @@ export default function ServerBar() {
                     width: '48px',
                     height: '48px',
                     borderRadius: isActive('/dashboard') ? '16px' : '24px',
-                    background: isActive('/dashboard') ? '#23a559' : '#313338',
+                    background: isActive('/dashboard') ? '#23a559' : '#1a1b1e',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -156,7 +156,7 @@ export default function ServerBar() {
                     width: '48px',
                     height: '48px',
                     borderRadius: '24px',
-                    background: '#313338',
+                    background: '#1a1b1e',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -177,7 +177,7 @@ export default function ServerBar() {
                     width: '48px',
                     height: '48px',
                     borderRadius: '24px',
-                    background: '#313338',
+                    background: '#1a1b1e',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',

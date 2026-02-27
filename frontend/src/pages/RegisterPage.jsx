@@ -23,7 +23,7 @@ export default function RegisterPage() {
         <div style={{
             width: '100vw',
             height: '100vh',
-            background: '#1e1f22',
+            background: '#0d0e10',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -54,7 +54,7 @@ export default function RegisterPage() {
                     width: '480px',
                     maxHeight: '90vh',
                     overflowY: 'auto',
-                    background: '#313338',
+                    background: '#1a1b1e',
                     borderRadius: '8px',
                     boxShadow: '0 2px 10px rgba(0,0,0,0.4)',
                     padding: '32px',

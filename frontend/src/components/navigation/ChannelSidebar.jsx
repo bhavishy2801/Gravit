@@ -28,7 +28,7 @@ export default function ChannelSidebar() {
             width: '240px',
             minWidth: '240px',
             height: '100vh',
-            background: '#2b2d31',
+            background: '#141517',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -36,7 +36,7 @@ export default function ChannelSidebar() {
             {/* Institution header */}
             <div style={{
                 padding: '12px 16px',
-                borderBottom: '2px solid #1e1f22',
+                borderBottom: '2px solid #0d0e10',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -63,7 +63,7 @@ export default function ChannelSidebar() {
                     alignItems: 'center',
                     gap: '6px',
                     padding: '6px 8px',
-                    background: '#1e1f22',
+                    background: '#0d0e10',
                     borderRadius: '4px',
                     cursor: 'text',
                 }}>
@@ -155,7 +155,7 @@ export default function ChannelSidebar() {
                                                     fontSize: '14px',
                                                     fontWeight: active ? 600 : 400,
                                                     color: active ? '#f2f3f5' : '#949ba4',
-                                                    background: active ? '#404249' : 'transparent',
+                                                    background: active ? '#2e3035' : 'transparent',
                                                     transition: 'color 0.15s',
                                                     cursor: 'pointer',
                                                 }}
@@ -194,11 +194,11 @@ export default function ChannelSidebar() {
             {/* User panel at bottom */}
             <div style={{
                 padding: '8px',
-                background: '#232428',
+                background: '#0d0e10',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                borderTop: '1px solid #1e1f22',
+                borderTop: '1px solid #080809',
             }}>
                 <div style={{
                     width: '32px',

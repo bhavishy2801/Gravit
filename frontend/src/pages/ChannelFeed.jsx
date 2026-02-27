@@ -65,7 +65,7 @@ export default function ChannelFeed() {
             <div style={{
                 padding: '16px 20px',
                 borderBottom: '1px solid rgba(255,255,255,0.06)',
-                background: '#313338',
+                background: '#1a1b1e',
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                     <div>

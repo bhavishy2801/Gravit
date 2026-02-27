@@ -45,7 +45,7 @@ export default function CreatePostModal({ isOpen, onClose, defaultChannel = '' }
                             style={{
                                 width: '520px',
                                 maxHeight: '80vh',
-                                background: '#313338',
+                                background: '#1a1b1e',
                                 borderRadius: '8px',
                                 boxShadow: '0 0 0 1px rgba(4,4,5,0.15), 0 8px 16px rgba(0,0,0,0.24)',
                                 overflow: 'hidden',

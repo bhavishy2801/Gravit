@@ -39,7 +39,7 @@ export default function Dashboard() {
             <div style={{
                 padding: '16px 24px',
                 borderBottom: '1px solid rgba(255,255,255,0.06)',
-                background: '#313338',
+                background: '#1a1b1e',
                 minHeight: '48px',
             }}>
                 <h1 style={{ fontSize: '20px', fontWeight: 700, color: '#f2f3f5', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -73,7 +73,7 @@ export default function Dashboard() {
                                 transition={{ delay: idx * 0.05 }}
                                 style={{
                                     padding: '16px',
-                                    background: '#2b2d31',
+                                    background: '#141517',
                                     borderRadius: '8px',
                                     border: '1px solid rgba(255,255,255,0.06)',
                                 }}
@@ -111,7 +111,7 @@ export default function Dashboard() {
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.3 }}
                         style={{
-                            background: '#2b2d31',
+                            background: '#141517',
                             borderRadius: '8px',
                             border: '1px solid rgba(255,255,255,0.06)',
                             overflow: 'hidden',
@@ -194,7 +194,7 @@ export default function Dashboard() {
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.3 }}
                         style={{
-                            background: '#2b2d31',
+                            background: '#141517',
                             borderRadius: '8px',
                             border: '1px solid rgba(255,255,255,0.06)',
                             overflow: 'hidden',

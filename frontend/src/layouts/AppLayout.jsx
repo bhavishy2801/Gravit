@@ -24,7 +24,7 @@ export default function AppLayout({ channelName, channelDescription }) {
                 flexDirection: 'column',
                 height: '100vh',
                 overflow: 'hidden',
-                background: '#313338',
+                background: '#1a1b1e',
             }}>
                 {/* Top bar */}
                 <TopBar channelName={channelName} description={channelDescription} />
