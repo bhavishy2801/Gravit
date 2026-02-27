@@ -1,0 +1,188 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  /* Discord-inspired dark theme */
+  --bg-primary: #313338;
+  --bg-secondary: #2b2d31;
+  --bg-tertiary: #1e1f22;
+  --bg-accent: #232428;
+  --bg-floating: #111214;
+  --bg-hover: #35373c;
+  --bg-active: #404249;
+  --bg-modifier: rgba(79, 84, 92, 0.16);
+
+  /* Text */
+  --text-primary: #f2f3f5;
+  --text-secondary: #b5bac1;
+  --text-muted: #949ba4;
+  --text-link: #00a8fc;
+
+  /* Brand / Accent */
+  --brand-primary: #5865f2;
+  --brand-hover: #4752c4;
+  --brand-active: #3c45a5;
+  --green: #23a559;
+  --green-hover: #1a7d42;
+  --red: #da373c;
+  --yellow: #f0b232;
+  --orange: #e67e22;
+
+  /* Urgency gradient stops */
+  --urgency-low: #23a559;
+  --urgency-medium: #f0b232;
+  --urgency-high: #e67e22;
+  --urgency-critical: #da373c;
+
+  /* Status colors */
+  --status-open: #949ba4;
+  --status-trending: #f0b232;
+  --status-escalated: #da373c;
+  --status-pending: #5865f2;
+  --status-resolved: #23a559;
+  --status-rejected: #ed4245;
+
+  /* Layout */
+  --server-bar-width: 72px;
+  --sidebar-width: 240px;
+  --topbar-height: 48px;
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-full: 50%;
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 400ms ease;
+
+  /* Shadows */
+  --shadow-low: 0 1px 0 rgba(4,4,5,0.2), 0 1.5px 0 rgba(6,6,7,0.05), 0 2px 0 rgba(4,4,5,0.05);
+  --shadow-medium: 0 4px 4px rgba(0,0,0,0.16);
+  --shadow-high: 0 8px 16px rgba(0,0,0,0.24);
+  --shadow-elevation: 0 0 0 1px rgba(4,4,5,0.15), 0 8px 16px rgba(0,0,0,0.24);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar — Discord style */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bg-floating);
+}
+
+/* Utility classes */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.gap-4 { gap: 16px; }
+.w-full { width: 100%; }
+.h-full { height: 100%; }
+.relative { position: relative; }
+.absolute { position: absolute; }
+.overflow-hidden { overflow: hidden; }
+.overflow-y-auto { overflow-y: auto; }
+.text-center { text-center: center; }
+.font-bold { font-weight: 700; }
+.font-semibold { font-weight: 600; }
+.font-medium { font-weight: 500; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Animations */
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+@keyframes slide-in {
+  from { transform: translateX(-20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes urgency-glow {
+  0%, 100% { box-shadow: 0 0 4px var(--urgency-critical); }
+  50% { box-shadow: 0 0 16px var(--urgency-critical); }
+}
+@keyframes count-up {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-pulse-red { animation: pulse-red 2s infinite; }
+.animate-slide-in { animation: slide-in 0.3s ease-out; }
+.animate-fade-in { animation: fade-in 0.3s ease-out; }
+
+/* Button reset */
+button {
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  outline: none;
+}
+
+/* Input styles */
+input, textarea, select {
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  outline: none;
+  transition: var(--transition-fast);
+}
+input:focus, textarea:focus, select:focus {
+  box-shadow: 0 0 0 2px var(--brand-primary);
+}
+input::placeholder, textarea::placeholder {
+  color: var(--text-muted);
+}
+
+a {
+  color: var(--text-link);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
