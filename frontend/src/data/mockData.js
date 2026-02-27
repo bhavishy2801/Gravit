@@ -263,8 +263,8 @@ export const leaderboard = [
 export const currentUser = {
   id: 'u1',
   pseudonym: 'Anon-7F3A',
-  email: 'student@university.edu',
+  email: 'student@iitj.ac.in',
   role: 'student',
-  institution: 'National Institute of Technology',
+  institution: 'IIT Jodhpur',
   avatar: null,
 };

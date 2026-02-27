@@ -51,7 +51,7 @@ export default function ChannelSidebar() {
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
                 }}>
-                    🎓 NIT Grievances
+                    🎓 IIT Jodhpur
                 </span>
                 <ChevronDown size={16} color="#b5bac1" />
             </div>

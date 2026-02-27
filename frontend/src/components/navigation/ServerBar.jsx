@@ -1,11 +1,13 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { BarChart3, Settings, LogOut } from 'lucide-react';
+import { BarChart3, Settings, LogOut, User } from 'lucide-react';
 import { channels } from '../../data/mockData';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function ServerBar() {
     const navigate = useNavigate();
     const location = useLocation();
+    const { logout } = useAuth();
 
     const isActive = (path) => location.pathname.startsWith(path);
 
@@ -146,6 +148,28 @@ export default function ServerBar() {
             {/* Spacer */}
             <div style={{ flex: 1 }} />
 
+            {/* Profile */}
+            <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => navigate('/profile')}
+                title="Profile Settings"
+                style={{
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: isActive('/profile') ? '16px' : '24px',
+                    background: isActive('/profile') ? '#5865f2' : '#1a1b1e',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: isActive('/profile') ? '#fff' : '#b5bac1',
+                    transition: 'border-radius 0.2s, background 0.2s',
+                    marginBottom: '4px',
+                }}
+            >
+                <User size={20} />
+            </motion.button>
+
             {/* Settings */}
             <motion.button
                 whileHover={{ scale: 1.1 }}
@@ -171,7 +195,7 @@ export default function ServerBar() {
             <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => navigate('/login')}
+                onClick={() => { logout(); navigate('/login'); }}
                 title="Logout"
                 style={{
                     width: '48px',
