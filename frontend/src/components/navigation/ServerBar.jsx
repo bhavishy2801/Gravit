@@ -45,7 +45,8 @@ export default function ServerBar() {
             alignItems: 'center',
             paddingTop: '12px',
             gap: '8px',
-            overflow: 'hidden',
+            overflowY: 'auto',
+            overflowX: 'hidden',
         }}>
             {/* Gravit Logo */}
             <motion.button
