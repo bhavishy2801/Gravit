@@ -87,94 +87,111 @@ export async function sendEscalationEmail({
 }) {
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   const fullPostUrl = postUrl.startsWith('http') ? postUrl : `${frontendUrl}${postUrl}`;
+  const institution = process.env.INSTITUTION_NAME || 'IIT Jodhpur';
+  const hasDeadline = responseWindowHours && responseWindowHours > 0;
 
-  const subject = `[Gravit] ⚠️ Grievance Escalated — ${postTitle}`;
+  const subject = `Escalation: ${postTitle} — Gravit`;
 
   const text = `
-Dear ${roleTitle},
+${roleTitle},
 
-A student grievance on Gravit has been escalated to you and requires your attention.
+A grievance requires your attention.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-GRIEVANCE DETAILS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Title:      ${postTitle}
-Channel:    ${channelName} (${category})
-Upvotes:    ${upvoteCount}
-Urgency:    ${urgencyScore}
-Level:      ${escalationLevel}
+Title: ${postTitle}
+Channel: ${channelName} · ${category}
+Upvotes: ${upvoteCount} | Urgency: ${urgencyScore} | Level: ${escalationLevel}
 
-Content:
-${postContent?.substring(0, 500) || '(no content)'}
-${postContent?.length > 500 ? '...(truncated)' : ''}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${(postContent || '').substring(0, 400)}${(postContent || '').length > 400 ? '…' : ''}
 
-You have ${responseWindowHours} hours to respond. If not addressed within this window, the grievance will automatically escalate to the next authority level.
+${hasDeadline ? `Response expected within ${responseWindowHours} hours.` : 'This is the final escalation tier — no further auto-escalation.'}
 
-View & Respond: ${fullPostUrl}
+View: ${fullPostUrl}
 
-— Gravit, Student Grievance Platform
+Gravit · ${institution}
   `.trim();
 
   const html = `
 <!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; padding: 20px;">
-  <div style="max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-    <!-- Header -->
-    <div style="background: linear-gradient(135deg, #5865f2, #7c3aed); padding: 24px 32px; color: #fff;">
-      <h1 style="margin: 0; font-size: 22px;">⚠️ Grievance Escalated</h1>
-      <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">A student issue requires your attention</p>
-    </div>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Helvetica Neue',Arial,sans-serif;color:#18181b;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 16px;">
+<tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;">
 
-    <!-- Body -->
-    <div style="padding: 32px;">
-      <p style="margin: 0 0 16px; color: #333;">Dear <strong>${roleTitle}</strong>,</p>
-      <p style="color: #555; line-height: 1.6;">
-        A grievance posted on Gravit has reached your escalation level and needs your response.
-      </p>
+  <!-- Top accent bar -->
+  <tr><td style="height:4px;background:#6366f1;"></td></tr>
 
-      <!-- Details card -->
-      <div style="background: #f8f9fa; border-left: 4px solid #5865f2; border-radius: 4px; padding: 16px 20px; margin: 20px 0;">
-        <h3 style="margin: 0 0 8px; color: #1a1b1e; font-size: 16px;">${postTitle}</h3>
-        <p style="margin: 0 0 12px; color: #666; font-size: 14px; line-height: 1.5;">
-          ${(postContent || '').substring(0, 300)}${(postContent || '').length > 300 ? '...' : ''}
+  <!-- Logo / Brand -->
+  <tr><td style="padding:28px 36px 0;">
+    <span style="font-size:18px;font-weight:700;letter-spacing:-0.3px;color:#18181b;">Gravit</span>
+    <span style="font-size:12px;color:#a1a1aa;margin-left:8px;">${institution}</span>
+  </td></tr>
+
+  <!-- Main -->
+  <tr><td style="padding:24px 36px 0;">
+    <p style="margin:0 0 4px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#6366f1;">Escalation · Level ${escalationLevel}</p>
+    <h1 style="margin:0 0 20px;font-size:20px;font-weight:600;line-height:1.3;color:#18181b;">${postTitle}</h1>
+
+    <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#52525b;">
+      ${(postContent || '').substring(0, 300)}${(postContent || '').length > 300 ? '…' : ''}
+    </p>
+
+    <!-- Meta row -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e4e4e7;border-bottom:1px solid #e4e4e7;margin:0 0 24px;">
+      <tr>
+        <td style="padding:14px 0;width:33%;text-align:center;border-right:1px solid #e4e4e7;">
+          <div style="font-size:20px;font-weight:700;color:#18181b;">${upvoteCount}</div>
+          <div style="font-size:11px;color:#71717a;margin-top:2px;">Upvotes</div>
+        </td>
+        <td style="padding:14px 0;width:34%;text-align:center;border-right:1px solid #e4e4e7;">
+          <div style="font-size:20px;font-weight:700;color:#18181b;">${urgencyScore}</div>
+          <div style="font-size:11px;color:#71717a;margin-top:2px;">Urgency</div>
+        </td>
+        <td style="padding:14px 0;width:33%;text-align:center;">
+          <div style="font-size:13px;font-weight:600;color:#18181b;">${channelName}</div>
+          <div style="font-size:11px;color:#71717a;margin-top:2px;">${category}</div>
+        </td>
+      </tr>
+    </table>
+
+    ${hasDeadline ? `
+    <!-- Deadline -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef9c3;border-radius:6px;margin:0 0 24px;">
+      <tr><td style="padding:12px 16px;">
+        <p style="margin:0;font-size:13px;color:#854d0e;">
+          <strong>Response expected within ${responseWindowHours} hours.</strong>
+          Unresolved grievances auto-escalate to the next authority.
         </p>
-        <table style="font-size: 13px; color: #555;">
-          <tr><td style="padding: 2px 12px 2px 0; font-weight: 600;">Channel</td><td>${channelName}</td></tr>
-          <tr><td style="padding: 2px 12px 2px 0; font-weight: 600;">Category</td><td>${category}</td></tr>
-          <tr><td style="padding: 2px 12px 2px 0; font-weight: 600;">Upvotes</td><td>${upvoteCount}</td></tr>
-          <tr><td style="padding: 2px 12px 2px 0; font-weight: 600;">Urgency Score</td><td>${urgencyScore}</td></tr>
-          <tr><td style="padding: 2px 12px 2px 0; font-weight: 600;">Escalation Level</td><td>${escalationLevel}</td></tr>
-        </table>
-      </div>
-
-      <!-- Timer warning -->
-      <div style="background: #fff3cd; border-radius: 6px; padding: 12px 16px; margin: 16px 0;">
-        <p style="margin: 0; color: #856404; font-size: 14px;">
-          ⏰ <strong>Response window: ${responseWindowHours} hours.</strong>
-          If not addressed, this will auto-escalate to the next authority level.
+      </td></tr>
+    </table>` : `
+    <!-- Final tier -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border-radius:6px;margin:0 0 24px;">
+      <tr><td style="padding:12px 16px;">
+        <p style="margin:0;font-size:13px;color:#166534;">
+          <strong>Final escalation tier.</strong> No further auto-escalation will occur.
         </p>
-      </div>
+      </td></tr>
+    </table>`}
 
-      <!-- CTA -->
-      <div style="text-align: center; margin: 28px 0 12px;">
-        <a href="${fullPostUrl}" style="
-          display: inline-block; padding: 12px 32px;
-          background: #5865f2; color: #fff; text-decoration: none;
-          border-radius: 6px; font-weight: 600; font-size: 15px;
-        ">View & Respond</a>
-      </div>
-    </div>
+    <!-- CTA -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
+      <tr><td align="center">
+        <a href="${fullPostUrl}" style="display:inline-block;padding:10px 28px;background:#6366f1;color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600;">View Grievance</a>
+      </td></tr>
+    </table>
+  </td></tr>
 
-    <!-- Footer -->
-    <div style="padding: 16px 32px; background: #f8f9fa; border-top: 1px solid #eee; text-align: center;">
-      <p style="margin: 0; color: #999; font-size: 12px;">
-        Gravit — Student Grievance Platform | ${process.env.INSTITUTION_NAME || 'IIT Jodhpur'}
-      </p>
-    </div>
-  </div>
+  <!-- Footer -->
+  <tr><td style="padding:20px 36px;border-top:1px solid #f4f4f5;">
+    <p style="margin:0;font-size:11px;color:#a1a1aa;text-align:center;">
+      This is an automated notification from Gravit. Do not reply to this email.
+    </p>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
 </body>
 </html>
   `.trim();

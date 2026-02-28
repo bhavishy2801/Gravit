@@ -5,7 +5,7 @@ import { rbac } from '../middleware/rbac.js';
 import { calculateUrgencyScore, THRESHOLDS } from '../services/urgencyScoring.js';
 import { transitionState } from '../services/stateMachine.js';
 import { checkContent } from '../services/moderation.js';
-import { getAuthorityAtLevel } from '../services/escalationConfig.js';
+import { getAuthorityAtLevel, getEscalationChain, getMaxLevel } from '../services/escalationConfig.js';
 import { sendEscalationEmail } from '../services/email.js';
 
 const router = Router();
@@ -666,6 +666,137 @@ router.post('/:id/report', authenticate, async (req, res, next) => {
     );
 
     res.json({ message: 'Report submitted successfully' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// POST /api/posts/:id/demo-escalate — Demo: send escalation email
+// Bypasses threshold logic for demo/testing purposes
+// ═══════════════════════════════════════════════════════
+router.post('/:id/demo-escalate', authenticate, async (req, res, next) => {
+  try {
+    const postId = req.params.id;
+    const { level } = req.body;
+    const targetLevel = parseInt(level) || 1;
+
+    // Get post + channel info
+    const postResult = await query(
+      `SELECT p.id, p.title, p.content, p.upvote_count, p.urgency_score,
+              p.current_escalation_level, p.state,
+              c.category, c.name as channel_name
+       FROM posts p
+       JOIN channels c ON p.channel_id = c.id
+       WHERE p.id = $1`,
+      [postId]
+    );
+
+    if (postResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    const post = postResult.rows[0];
+    const category = post.category;
+    const maxLevel = getMaxLevel(category);
+
+    if (targetLevel > maxLevel) {
+      return res.status(400).json({ error: `Max escalation level for ${category} is ${maxLevel}` });
+    }
+
+    const authority = getAuthorityAtLevel(category, targetLevel);
+    if (!authority) {
+      return res.status(400).json({ error: `No authority found for ${category} level ${targetLevel}` });
+    }
+
+    const hours = authority.hours || 0;
+
+    // Auto-step through intermediate states for demo
+    // open → trending → escalated is required by the state machine
+    const currentState = post.state;
+    if (currentState === 'open') {
+      await transitionState(postId, 'trending');
+    }
+    // Re-read state after possible transition
+    const refreshed = await query('SELECT state FROM posts WHERE id = $1', [postId]);
+    const stateNow = refreshed.rows[0].state;
+    if (stateNow === 'trending' || stateNow === 'escalated' || stateNow === 'resolution_rejected') {
+      // trending → escalated, or escalated → escalated (level-up), or resolution_rejected → escalated
+      await transitionState(postId, 'escalated', {
+        escalationLevel: targetLevel,
+        responseWindowHours: hours || null,
+      });
+    }
+
+    // Log escalation
+    await query(
+      `INSERT INTO escalations (post_id, level, trigger_type, notified_email)
+       VALUES ($1, $2, 'demo', $3)`,
+      [postId, targetLevel, authority.email]
+    );
+
+    // Send the email
+    const emailResult = await sendEscalationEmail({
+      to: authority.email,
+      roleTitle: authority.role,
+      postTitle: post.title,
+      postContent: post.content,
+      channelName: post.channel_name,
+      category,
+      upvoteCount: post.upvote_count,
+      urgencyScore: post.urgency_score,
+      escalationLevel: targetLevel,
+      postUrl: `/posts/${postId}`,
+      responseWindowHours: hours || null,
+    });
+
+    // Broadcast state change
+    const io = req.app.get('io');
+    io.to(`post:${postId}`).emit('urgency:update', {
+      postId,
+      score: post.urgency_score,
+      state: 'escalated',
+      upvoteCount: post.upvote_count,
+    });
+
+    // Return escalation chain for this category so frontend can show buttons
+    const chain = getEscalationChain(category);
+
+    res.json({
+      message: `Email sent to ${authority.role} (${authority.email})`,
+      level: targetLevel,
+      maxLevel,
+      authority: { role: authority.role, email: authority.email, hours },
+      chain: chain.map(t => ({ level: t.level, role: t.role, email: t.email, hours: t.hours })),
+      state: 'escalated',
+      messageId: emailResult?.messageId,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// GET /api/posts/:id/escalation-chain — Get escalation chain for a post's category
+// ═══════════════════════════════════════════════════════
+router.get('/:id/escalation-chain', optionalAuth, async (req, res, next) => {
+  try {
+    const postId = req.params.id;
+    const postResult = await query(
+      `SELECT c.category, p.current_escalation_level
+       FROM posts p JOIN channels c ON p.channel_id = c.id WHERE p.id = $1`,
+      [postId]
+    );
+    if (postResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    const { category, current_escalation_level } = postResult.rows[0];
+    const chain = getEscalationChain(category);
+    res.json({
+      category,
+      currentLevel: current_escalation_level || 0,
+      chain: chain.map(t => ({ level: t.level, role: t.role, email: t.email, hours: t.hours })),
+    });
   } catch (err) {
     next(err);
   }

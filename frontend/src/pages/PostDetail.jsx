@@ -1,6 +1,6 @@
 ﻿import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, ArrowBigUp, MessageSquare, Share2, Flag, Send, Loader, Trash2, X, Check } from 'lucide-react';
+import { ArrowLeft, ArrowBigUp, MessageSquare, Share2, Flag, Send, Loader, Trash2, X, Check, Mail, ChevronUp } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
@@ -34,6 +34,9 @@ export default function PostDetail() {
     const [reportOpen, setReportOpen] = useState(false);
     const [reportReason, setReportReason] = useState('');
     const [reportSubmitting, setReportSubmitting] = useState(false);
+    const [escalationChain, setEscalationChain] = useState([]);
+    const [currentEscLevel, setCurrentEscLevel] = useState(0);
+    const [demoSending, setDemoSending] = useState(null); // which level is currently sending
 
     const canDelete = post && user && (
         user.id === post.authorId ||
@@ -116,14 +119,24 @@ export default function PostDetail() {
         }
     }, [postId]);
 
+    const fetchEscalationChain = useCallback(async () => {
+        try {
+            const res = await api.get(`/posts/${postId}/escalation-chain`);
+            setEscalationChain(res.data.chain || []);
+            setCurrentEscLevel(res.data.currentLevel || 0);
+        } catch (err) {
+            console.error('Failed to load escalation chain:', err);
+        }
+    }, [postId]);
+
     useEffect(() => {
         async function loadData() {
             setLoading(true);
-            await Promise.all([fetchPost(), fetchComments()]);
+            await Promise.all([fetchPost(), fetchComments(), fetchEscalationChain()]);
             setLoading(false);
         }
         loadData();
-    }, [fetchPost, fetchComments]);
+    }, [fetchPost, fetchComments, fetchEscalationChain]);
 
     // Real-time: listen for comments and urgency updates on this post
     const { joinPost, leavePost, on, off } = useSocket();
@@ -266,6 +279,21 @@ export default function PostDetail() {
             } : prev);
         } catch (err) {
             console.error('Failed to vote:', err);
+        }
+    };
+
+    const handleDemoEscalate = async (level) => {
+        setDemoSending(level);
+        try {
+            const res = await api.post(`/posts/${postId}/demo-escalate`, { level });
+            setCurrentEscLevel(level);
+            if (res.data.chain) setEscalationChain(res.data.chain);
+            setPost(prev => prev ? { ...prev, state: res.data.state } : prev);
+            showToast(`Email sent to ${res.data.authority.role}`);
+        } catch (err) {
+            showToast(err.response?.data?.error || 'Failed to send escalation email');
+        } finally {
+            setDemoSending(null);
         }
     };
 
@@ -485,6 +513,78 @@ export default function PostDetail() {
                 <div style={{ padding: '16px 20px' }}>
                     <UrgencyMeter score={post.urgencyScore} />
                 </div>
+
+                {/* Demo Escalation Panel */}
+                {escalationChain.length > 0 && (
+                    <div style={{ padding: '0 20px 16px' }}>
+                        <div style={{
+                            background: 'rgba(99,102,241,0.04)',
+                            border: '1px solid rgba(99,102,241,0.15)',
+                            borderRadius: '8px',
+                            padding: '14px 16px',
+                        }}>
+                            <div style={{
+                                fontSize: '11px', fontWeight: 700, color: '#6366f1',
+                                textTransform: 'uppercase', letterSpacing: '0.5px',
+                                marginBottom: '10px',
+                                display: 'flex', alignItems: 'center', gap: '6px',
+                            }}>
+                                <Mail size={13} /> Demo — Send Escalation Email
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                {escalationChain.map((tier) => {
+                                    const isSent = tier.level <= currentEscLevel;
+                                    const isSending = demoSending === tier.level;
+                                    const isNext = tier.level === currentEscLevel + 1 || (currentEscLevel === 0 && tier.level === 1);
+                                    return (
+                                        <motion.button
+                                            key={tier.level}
+                                            whileTap={{ scale: 0.95 }}
+                                            onClick={() => handleDemoEscalate(tier.level)}
+                                            disabled={isSending}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: '6px',
+                                                padding: '7px 14px', borderRadius: '6px',
+                                                fontSize: '12px', fontWeight: 600,
+                                                cursor: isSending ? 'wait' : 'pointer',
+                                                border: isSent
+                                                    ? '1px solid rgba(35,165,89,0.3)'
+                                                    : isNext
+                                                        ? '1px solid rgba(99,102,241,0.4)'
+                                                        : '1px solid rgba(255,255,255,0.08)',
+                                                background: isSent
+                                                    ? 'rgba(35,165,89,0.1)'
+                                                    : isNext
+                                                        ? 'rgba(99,102,241,0.12)'
+                                                        : 'rgba(255,255,255,0.04)',
+                                                color: isSent
+                                                    ? '#23a559'
+                                                    : isNext
+                                                        ? '#818cf8'
+                                                        : '#71717a',
+                                                transition: 'all 0.15s',
+                                            }}
+                                        >
+                                            {isSending ? (
+                                                <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                                            ) : isSent ? (
+                                                <Check size={13} />
+                                            ) : (
+                                                <ChevronUp size={13} />
+                                            )}
+                                            L{tier.level}: {tier.role}
+                                        </motion.button>
+                                    );
+                                })}
+                            </div>
+                            {currentEscLevel > 0 && (
+                                <div style={{ fontSize: '11px', color: '#71717a', marginTop: '8px' }}>
+                                    Current level: {currentEscLevel} — {escalationChain.find(t => t.level === currentEscLevel)?.role}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* DMS Timer (if escalated) */}
                 {(post.state === 'escalated' || post.state === 'resolution_rejected') && post.responseDeadline && (
