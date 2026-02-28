@@ -59,6 +59,13 @@ async function runSeed(pool) {
     { id: 'cell', name: 'placement-cell', category: 'placement', icon: '💼', desc: 'Placement cell operations', sort: 12 },
     { id: 'companies', name: 'companies', category: 'placement', icon: '💼', desc: 'Company visit issues', sort: 13 },
     { id: 'internships', name: 'internships', category: 'placement', icon: '💼', desc: 'Internship coordination', sort: 14 },
+    // Mess
+    { id: 'mess-quality', name: 'food-quality', category: 'mess', icon: '🍽️', desc: 'Food quality complaints', sort: 15 },
+    { id: 'mess-hygiene', name: 'hygiene', category: 'mess', icon: '🍽️', desc: 'Mess hygiene issues', sort: 16 },
+    { id: 'mess-timing', name: 'timing', category: 'mess', icon: '🍽️', desc: 'Mess timing issues', sort: 17 },
+    { id: 'mess-menu', name: 'menu', category: 'mess', icon: '🍽️', desc: 'Menu & dietary concerns', sort: 18 },
+    { id: 'mess-billing', name: 'billing', category: 'mess', icon: '🍽️', desc: 'Mess fee & billing issues', sort: 19 },
+    { id: 'mess-general', name: 'general', category: 'mess', icon: '🍽️', desc: 'General mess issues', sort: 20 },
   ];
 
   // ─── Hostel Channels ─────────────────────────
@@ -99,47 +106,42 @@ async function runSeed(pool) {
   console.log(`  ✅ ${channelsData.length} channels created (14 base + ${hostels.length * hostelSubCategories.length} hostel)`);
 
   // ─── Escalation Hierarchy ────────────────────
+  // Mirrors services/escalationConfig.js — stored in DB for queries by
+  // the authority dashboard + DMS monitor.
   const hierarchyData = [
-    // Academia
-    { cat: 'academia', level: 1, role: 'HoD', hours: 72 },
-    { cat: 'academia', level: 2, role: 'Dean', hours: 120 },
-    { cat: 'academia', level: 3, role: 'Vice Chancellor', hours: 168 },
-    { cat: 'academia', level: 4, role: 'Public Transparency Report', hours: 0 },
-    // Bureaucracy
-    { cat: 'bureaucracy', level: 1, role: 'Registrar', hours: 72 },
-    { cat: 'bureaucracy', level: 2, role: 'Admin Head', hours: 120 },
-    { cat: 'bureaucracy', level: 3, role: 'Vice Chancellor', hours: 168 },
-    { cat: 'bureaucracy', level: 4, role: 'Public Transparency Report', hours: 0 },
-    // Infrastructure
-    { cat: 'infrastructure', level: 1, role: 'Estate Officer', hours: 72 },
-    { cat: 'infrastructure', level: 2, role: 'Dean', hours: 120 },
-    { cat: 'infrastructure', level: 3, role: 'Vice Chancellor', hours: 168 },
-    { cat: 'infrastructure', level: 4, role: 'Public Transparency Report', hours: 0 },
-    // Placement
-    { cat: 'placement', level: 1, role: 'TPO', hours: 72 },
-    { cat: 'placement', level: 2, role: 'Dean', hours: 120 },
-    { cat: 'placement', level: 3, role: 'Vice Chancellor', hours: 168 },
-    { cat: 'placement', level: 4, role: 'Public Transparency Report', hours: 0 },
+    // Academia (2 tiers)
+    { cat: 'academia', level: 1, role: 'Office of Students', email: 'office_students@iitj.ac.in', hours: 72 },
+    { cat: 'academia', level: 2, role: 'Dean of Academic Affairs', email: 'doaa@iitj.ac.in', hours: 0 },
+    // Bureaucracy (1 tier)
+    { cat: 'bureaucracy', level: 1, role: 'ERP', email: 'erp@iitj.ac.in', hours: 0 },
+    // Infrastructure (1 tier)
+    { cat: 'infrastructure', level: 1, role: 'OIE', email: 'oie@iitj.ac.in', hours: 0 },
+    // Placement (1 tier)
+    { cat: 'placement', level: 1, role: 'Placement Office', email: 'placement@iitj.ac.in', hours: 0 },
+    // Mess (3 tiers)
+    { cat: 'mess', level: 1, role: 'Dining Services', email: 'catering@iitj.ac.in', hours: 72 },
+    { cat: 'mess', level: 2, role: 'Board of Hostel Affairs', email: 'bha@iitj.ac.in', hours: 72 },
+    { cat: 'mess', level: 3, role: 'Associate Dean Hostel Affairs', email: 'adha@iitj.ac.in', hours: 0 },
   ];
 
-  // Hostel hierarchy for each hostel
+  // Hostel hierarchy for each hostel (3 tiers)
   for (const h of hostels) {
-    const hCat = `hostel-${h.toLowerCase()}`;
+    const hLower2 = h.toLowerCase();
+    const hCat = `hostel-${hLower2}`;
     hierarchyData.push(
-      { cat: hCat, level: 1, role: 'Caretaker', hours: 48 },
-      { cat: hCat, level: 2, role: 'Warden', hours: 96 },
-      { cat: hCat, level: 3, role: 'Chief Warden', hours: 144 },
-      { cat: hCat, level: 4, role: 'Dean Student Affairs', hours: 192 },
-      { cat: hCat, level: 5, role: 'Public Transparency Report', hours: 0 },
+      { cat: hCat, level: 1, role: `${h} Caretaker`,                   email: `${hLower2}caretaker@iitj.ac.in`,       hours: 96  },   // ~4 days
+      { cat: hCat, level: 2, role: `Warden ${h} Hostel`,               email: `warden_${hLower2}_hostel@iitj.ac.in`,  hours: 120 },   // ~5 days
+      { cat: hCat, level: 3, role: 'Associate Dean Hostel Affairs',    email: 'adha@iitj.ac.in',                      hours: 0   },   // final
     );
   }
 
   for (const h of hierarchyData) {
     await pool.query(`
-        INSERT INTO escalation_hierarchy (category, level, role_title, response_window_hours)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (category, level) DO NOTHING
-      `, [h.cat, h.level, h.role, h.hours]);
+        INSERT INTO escalation_hierarchy (category, level, role_title, contact_email, response_window_hours)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (category, level) DO UPDATE
+          SET role_title = $3, contact_email = $4, response_window_hours = $5
+      `, [h.cat, h.level, h.role, h.email || null, h.hours]);
   }
   console.log('  ✅ Escalation hierarchy created');
 

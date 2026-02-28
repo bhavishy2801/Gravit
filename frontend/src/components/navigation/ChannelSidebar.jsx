@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Hash, Plus, Search, Lock, GraduationCap, Landmark, Building2, Briefcase, Home } from 'lucide-react';
+import { ChevronDown, Hash, Plus, Search, Lock, GraduationCap, Landmark, Building2, Briefcase, Home, UtensilsCrossed } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSocket } from '../../contexts/SocketContext';
 import api from '../../services/api';
@@ -12,6 +12,7 @@ const CATEGORY_ICONS = {
     infrastructure: Building2,
     placement: Briefcase,
     hostel: Home,
+    mess: UtensilsCrossed,
 };
 
 export default function ChannelSidebar({ selectedServer }) {

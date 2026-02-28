@@ -5,6 +5,8 @@ import { rbac } from '../middleware/rbac.js';
 import { calculateUrgencyScore, THRESHOLDS } from '../services/urgencyScoring.js';
 import { transitionState } from '../services/stateMachine.js';
 import { checkContent } from '../services/moderation.js';
+import { getAuthorityAtLevel } from '../services/escalationConfig.js';
+import { sendEscalationEmail } from '../services/email.js';
 
 const router = Router();
 
@@ -379,28 +381,52 @@ router.post('/:id/upvote', authenticate, async (req, res, next) => {
       const updated = await transitionState(postId, 'trending');
       newState = updated.state;
     } else if (post.state === 'trending' && newScore >= THRESHOLDS.T2_ESCALATED) {
-      // Get response window from hierarchy
+      // Get category info
       const postFull = await query(
-        'SELECT c.category FROM posts p JOIN channels c ON p.channel_id = c.id WHERE p.id = $1',
+        'SELECT p.title, p.content, c.category, c.name as channel_name FROM posts p JOIN channels c ON p.channel_id = c.id WHERE p.id = $1',
         [postId]
       );
       const category = postFull.rows[0]?.category;
-      const hierarchy = await query(
-        'SELECT response_window_hours FROM escalation_hierarchy WHERE category = $1 AND level = 1',
-        [category]
-      );
-      const hours = hierarchy.rows[0]?.response_window_hours || 72;
+      const channelName = postFull.rows[0]?.channel_name || category;
+      const pTitle = postFull.rows[0]?.title || 'Untitled';
+      const pContent = postFull.rows[0]?.content || '';
+
+      // Get authority info from escalation config
+      const authority = getAuthorityAtLevel(category, 1);
+      const hours = authority?.hours || 72;
 
       const updated = await transitionState(postId, 'escalated', {
         escalationLevel: 1,
-        responseWindowHours: hours,
+        responseWindowHours: hours || 72,   // if hours=0 (final), still give a window for the DB
       });
       newState = updated.state;
 
-      // Notify the authority assigned to this category + level
-      const postTitleResult = await query('SELECT title FROM posts WHERE id = $1', [postId]);
-      const postTitle = postTitleResult.rows[0]?.title?.substring(0, 80) || 'Untitled';
+      // Log escalation in DB
+      await query(
+        `INSERT INTO escalations (post_id, level, trigger_type, notified_email)
+         VALUES ($1, $2, 'threshold', $3)`,
+        [postId, 1, authority?.email || null]
+      );
 
+      // ── Send email to the authority ────────────────
+      if (authority?.email) {
+        const upCount = (await query('SELECT upvote_count FROM posts WHERE id = $1', [postId])).rows[0]?.upvote_count || 0;
+        sendEscalationEmail({
+          to: authority.email,
+          roleTitle: authority.role,
+          postTitle: pTitle,
+          postContent: pContent,
+          channelName,
+          category,
+          upvoteCount: upCount,
+          urgencyScore: newScore,
+          escalationLevel: 1,
+          postUrl: `/posts/${postId}`,
+          responseWindowHours: hours || 'N/A (final tier)',
+        }).catch(err => console.error('Email send failed:', err.message));
+      }
+
+      // ── In-app notification to assigned platform users ──
       const assignedAuthority = await query(
         'SELECT user_id FROM authority_assignments WHERE category = $1 AND hierarchy_level = $2',
         [category, 1]
@@ -409,14 +435,13 @@ router.post('/:id/upvote', authenticate, async (req, res, next) => {
         await query(
           `INSERT INTO notifications (user_id, type, title, message, link) VALUES ($1, $2, $3, $4, $5)`,
           [auth.user_id, 'escalation', '⚠️ Post escalated to you',
-          `"${postTitle}" in ${category} needs your attention (${hours}h to respond).`,
+          `"${pTitle.substring(0, 80)}" in ${category} needs your attention (${hours}h to respond).`,
           `/posts/${postId}`]
         );
-        // Push escalation notification in real-time
         const io = req.app.get('io');
         io.to(`user:${auth.user_id}`).emit('notification:new', {
           type: 'escalation', title: '⚠️ Post escalated to you',
-          message: `"${postTitle}" in ${category} needs your attention (${hours}h to respond).`,
+          message: `"${pTitle.substring(0, 80)}" in ${category} needs your attention (${hours}h to respond).`,
           link: `/posts/${postId}`,
         });
       }

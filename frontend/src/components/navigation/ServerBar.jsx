@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { BarChart3, LogOut, User, GraduationCap, Landmark, Building2, Briefcase, Home, Plus, Compass } from 'lucide-react';
+import { BarChart3, LogOut, User, GraduationCap, Landmark, Building2, Briefcase, Home, Plus, Compass, UtensilsCrossed } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSocket } from '../../contexts/SocketContext';
 import api from '../../services/api';
@@ -13,6 +13,7 @@ const CATEGORY_ICONS = {
     infrastructure: Building2,
     placement: Briefcase,
     hostel: Home,
+    mess: UtensilsCrossed,
 };
 
 export default function ServerBar({ selectedServer, onSelectServer }) {

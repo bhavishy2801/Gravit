@@ -312,3 +312,18 @@ $$;
 
 -- Now safe to create the index (column guaranteed to exist)
 CREATE INDEX IF NOT EXISTS idx_servers_invite_code ON servers(invite_code);
+
+-- Add contact_email to escalation_hierarchy if missing (for email escalation)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'escalation_hierarchy' AND column_name = 'contact_email'
+  ) THEN
+    ALTER TABLE escalation_hierarchy ADD COLUMN contact_email VARCHAR(255);
+  END IF;
+END
+$$;
+
+-- Index for faster escalation lookups by category+level
+CREATE INDEX IF NOT EXISTS idx_escalation_category_level ON escalation_hierarchy(category, level);
