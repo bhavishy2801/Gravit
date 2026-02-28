@@ -4,6 +4,7 @@ import { authenticate, optionalAuth } from '../middleware/auth.js';
 import { rbac } from '../middleware/rbac.js';
 import { calculateUrgencyScore, THRESHOLDS } from '../services/urgencyScoring.js';
 import { transitionState } from '../services/stateMachine.js';
+import { checkContent } from '../services/moderation.js';
 
 const router = Router();
 
@@ -229,6 +230,15 @@ router.post('/', authenticate, rbac('student', 'moderator'), async (req, res, ne
       if (userHostel !== hostelCode && req.user.role === 'student') {
         return res.status(403).json({ error: `You can only post in your own hostel (${userHostel}) channels` });
       }
+    }
+
+    // ── AI Content Moderation ────────────────────────
+    const moderation = await checkContent(title + ' ' + content);
+    if (moderation.flagged) {
+      return res.status(400).json({
+        error: `Content blocked by moderation: ${moderation.reason}`,
+        categories: moderation.categories,
+      });
     }
 
     const result = await query(`

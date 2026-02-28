@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query } from '../config/database.js';
 import { authenticate, optionalAuth } from '../middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
+import { checkContent } from '../services/moderation.js';
 
 const router = Router();
 
@@ -68,6 +69,15 @@ router.post('/:postId', authenticate, async (req, res, next) => {
     const postCheck = await query('SELECT id FROM posts WHERE id = $1', [postId]);
     if (postCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Post not found' });
+    }
+
+    // ── AI Content Moderation ────────────────────────
+    const moderation = await checkContent(content);
+    if (moderation.flagged) {
+      return res.status(400).json({
+        error: `Comment blocked by moderation: ${moderation.reason}`,
+        categories: moderation.categories,
+      });
     }
 
     // Build materialized path
