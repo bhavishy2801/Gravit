@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { CheckCircle, XCircle, Clock } from 'lucide-react';
 
@@ -6,18 +6,32 @@ export default function VerificationPoll({
     adminResponse,
     deadline,
     votes = { yes: 0, no: 0 },
+    userVote: initialUserVote = null,
     onVote,
 }) {
-    const [userVote, setUserVote] = useState(null);
-    const total = votes.yes + votes.no;
-    const yesPct = total > 0 ? (votes.yes / total) * 100 : 50;
-    const noPct = total > 0 ? (votes.no / total) * 100 : 50;
+    const [userVote, setUserVote] = useState(initialUserVote);
+    const [localVotes, setLocalVotes] = useState(votes);
+    const total = localVotes.yes + localVotes.no;
+    const yesPct = total > 0 ? (localVotes.yes / total) * 100 : 50;
+    const noPct = total > 0 ? (localVotes.no / total) * 100 : 50;
     const deadlineDate = new Date(deadline);
     const hoursLeft = Math.max(0, Math.floor((deadlineDate - Date.now()) / (1000 * 60 * 60)));
 
-    const handleVote = (vote) => {
+    const handleVote = async (vote) => {
+        if (userVote) return;
         setUserVote(vote);
-        onVote?.(vote);
+        // Optimistic update
+        setLocalVotes(prev => ({
+            yes: prev.yes + (vote === 'yes' ? 1 : 0),
+            no: prev.no + (vote === 'no' ? 1 : 0),
+        }));
+        try {
+            await onVote?.(vote);
+        } catch (err) {
+            // Revert on error
+            setUserVote(null);
+            setLocalVotes(votes);
+        }
     };
 
     return (
@@ -37,15 +51,16 @@ export default function VerificationPoll({
                     borderRadius: '50%',
                     background: 'rgba(88,101,242,0.2)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '16px',
                 }}>
-                    🔍
+                    
                 </div>
                 <div>
                     <div style={{ fontSize: '14px', fontWeight: 600, color: '#f2f3f5' }}>
                         Resolution Verification
                     </div>
                     <div style={{ fontSize: '11px', color: '#949ba4', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Clock size={10} /> {hoursLeft}h remaining · {total} votes cast
+                        <Clock size={10} /> {hoursLeft}h remaining  {total} votes cast
                     </div>
                 </div>
             </div>
@@ -117,7 +132,7 @@ export default function VerificationPoll({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
-                        <span style={{ color: '#23a559', fontWeight: 600 }}>✅ Yes ({votes.yes})</span>
+                        <span style={{ color: '#23a559', fontWeight: 600 }}>Yes ({localVotes.yes})</span>
                         <span style={{ color: '#949ba4' }}>{yesPct.toFixed(0)}%</span>
                     </div>
                     <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
@@ -131,7 +146,7 @@ export default function VerificationPoll({
                 </div>
                 <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
-                        <span style={{ color: '#da373c', fontWeight: 600 }}>❌ No ({votes.no})</span>
+                        <span style={{ color: '#da373c', fontWeight: 600 }}>No ({localVotes.no})</span>
                         <span style={{ color: '#949ba4' }}>{noPct.toFixed(0)}%</span>
                     </div>
                     <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>

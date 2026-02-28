@@ -1,13 +1,13 @@
-import { useParams, useNavigate } from 'react-router-dom';
+﻿import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, ArrowBigUp, MessageSquare, Share2, Flag, Send } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { ArrowLeft, ArrowBigUp, MessageSquare, Share2, Flag, Send, Loader } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
 import StateBadge from '../components/ui/StateBadge';
 import UrgencyMeter from '../components/ui/UrgencyMeter';
 import DMSTimer from '../components/ui/DMSTimer';
 import VerificationPoll from '../components/ui/VerificationPoll';
 import ThreadedComments from '../components/posts/ThreadedComments';
-import { posts, comments as commentsData } from '../data/mockData';
+import api from '../services/api';
 
 function timeAgo(dateStr) {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -23,18 +23,133 @@ export default function PostDetail() {
     const { postId } = useParams();
     const navigate = useNavigate();
     const [commentText, setCommentText] = useState('');
-    const [upvoted, setUpvoted] = useState(false);
+    const [post, setPost] = useState(null);
+    const [comments, setComments] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [submittingComment, setSubmittingComment] = useState(false);
 
-    const post = useMemo(() => posts.find(p => p.id === postId), [postId]);
-    const postComments = commentsData[postId] || [];
+    const fetchPost = useCallback(async () => {
+        try {
+            const res = await api.get(`/posts/${postId}`);
+            setPost(res.data.post);
+        } catch (err) {
+            console.error('Failed to load post:', err);
+        }
+    }, [postId]);
+
+    const fetchComments = useCallback(async () => {
+        try {
+            const res = await api.get(`/comments/${postId}`);
+            setComments(res.data.comments);
+        } catch (err) {
+            console.error('Failed to load comments:', err);
+        }
+    }, [postId]);
+
+    useEffect(() => {
+        async function loadData() {
+            setLoading(true);
+            await Promise.all([fetchPost(), fetchComments()]);
+            setLoading(false);
+        }
+        loadData();
+    }, [fetchPost, fetchComments]);
+
+    const handleUpvote = async () => {
+        if (!post) return;
+        try {
+            const res = await api.post(`/posts/${postId}/upvote`);
+            setPost(prev => ({
+                ...prev,
+                upvoted: res.data.upvoted,
+                upvotes: res.data.upvoteCount,
+                urgencyScore: res.data.urgencyScore,
+                state: res.data.state,
+            }));
+        } catch (err) {
+            console.error('Failed to upvote:', err);
+        }
+    };
+
+    const handleCommentSubmit = async () => {
+        if (!commentText.trim() || submittingComment) return;
+        setSubmittingComment(true);
+        try {
+            await api.post(`/comments/${postId}`, { content: commentText.trim() });
+            setCommentText('');
+            await fetchComments();
+            // Update comment count on the post
+            setPost(prev => prev ? { ...prev, commentCount: prev.commentCount + 1 } : prev);
+        } catch (err) {
+            console.error('Failed to submit comment:', err);
+        } finally {
+            setSubmittingComment(false);
+        }
+    };
+
+    const handleReply = async (parentId, content) => {
+        try {
+            await api.post(`/comments/${postId}`, { content, parentId });
+            await fetchComments();
+            setPost(prev => prev ? { ...prev, commentCount: prev.commentCount + 1 } : prev);
+        } catch (err) {
+            console.error('Failed to reply:', err);
+        }
+    };
+
+    const handleCommentUpvote = async (commentId) => {
+        try {
+            const res = await api.post(`/comments/${commentId}/upvote`);
+            setComments(prev => prev.map(c =>
+                c.id === commentId
+                    ? { ...c, upvotes: res.data.upvoteCount, upvoted: res.data.upvoted }
+                    : c
+            ));
+        } catch (err) {
+            console.error('Failed to upvote comment:', err);
+        }
+    };
+
+    const handleVerificationVote = async (vote) => {
+        try {
+            const res = await api.post(`/posts/${postId}/verify`, { vote: vote === 'yes' });
+            setPost(prev => prev ? {
+                ...prev,
+                verification: {
+                    ...prev.verification,
+                    yesCount: res.data.yesCount,
+                    noCount: res.data.noCount,
+                    totalVotes: res.data.totalVotes,
+                    userVote: vote,
+                },
+            } : prev);
+        } catch (err) {
+            console.error('Failed to vote:', err);
+        }
+    };
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleCommentSubmit();
+        }
+    };
+
+    if (loading) {
+        return (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#949ba4' }}>
+                <Loader size={24} style={{ animation: 'spin 1s linear infinite' }} />
+            </div>
+        );
+    }
 
     if (!post) {
         return (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#949ba4' }}>
                 <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
+                    <div style={{ fontSize: '48px', marginBottom: '16px' }}></div>
                     <p>Post not found</p>
-                    <button onClick={() => navigate(-1)} style={{ color: '#00a8fc', marginTop: '8px' }}>
+                    <button onClick={() => navigate(-1)} style={{ color: '#00a8fc', marginTop: '8px', background: 'transparent', border: 'none', cursor: 'pointer' }}>
                         Go back
                     </button>
                 </div>
@@ -63,7 +178,7 @@ export default function PostDetail() {
                 <motion.button
                     whileHover={{ scale: 1.1 }}
                     onClick={() => navigate(-1)}
-                    style={{ display: 'flex', color: '#b5bac1' }}
+                    style={{ display: 'flex', color: '#b5bac1', background: 'transparent', border: 'none', cursor: 'pointer' }}
                 >
                     <ArrowLeft size={20} />
                 </motion.button>
@@ -95,12 +210,12 @@ export default function PostDetail() {
                         <div style={{
                             width: '44px', height: '44px',
                             borderRadius: '50%',
-                            background: `hsl(${post.author.charCodeAt(5) * 30}, 60%, 45%)`,
+                            background: `hsl(${post.authorAvatarHue || 0}, 60%, 45%)`,
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontSize: '16px', fontWeight: 700, color: '#fff',
                             flexShrink: 0,
                         }}>
-                            {post.author.slice(5, 7)}
+                            {post.author?.slice(0, 2)}
                         </div>
 
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -126,13 +241,13 @@ export default function PostDetail() {
                             {/* Content */}
                             <p style={{
                                 fontSize: '14px', color: '#dcddde', lineHeight: 1.7,
-                                marginBottom: '16px',
+                                marginBottom: '16px', whiteSpace: 'pre-wrap',
                             }}>
                                 {post.content}
                             </p>
 
                             {/* Tags */}
-                            {post.tags && (
+                            {post.tags && post.tags.length > 0 && (
                                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '16px' }}>
                                     {post.tags.map(tag => (
                                         <span key={tag} style={{
@@ -150,19 +265,20 @@ export default function PostDetail() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                 <motion.button
                                     whileTap={{ scale: 0.9 }}
-                                    onClick={() => setUpvoted(!upvoted)}
+                                    onClick={handleUpvote}
                                     style={{
                                         display: 'flex', alignItems: 'center', gap: '6px',
                                         padding: '6px 14px', borderRadius: '4px',
-                                        background: upvoted ? 'rgba(88,101,242,0.2)' : 'rgba(255,255,255,0.04)',
-                                        color: upvoted ? '#5865f2' : '#b5bac1',
+                                        background: post.upvoted ? 'rgba(88,101,242,0.2)' : 'rgba(255,255,255,0.04)',
+                                        color: post.upvoted ? '#5865f2' : '#b5bac1',
                                         fontSize: '13px', fontWeight: 600,
-                                        border: upvoted ? '1px solid #5865f233' : '1px solid transparent',
+                                        border: post.upvoted ? '1px solid #5865f233' : '1px solid transparent',
                                         transition: 'all 0.15s',
+                                        cursor: 'pointer',
                                     }}
                                 >
-                                    <ArrowBigUp size={18} fill={upvoted ? '#5865f2' : 'none'} />
-                                    {post.upvotes + (upvoted ? 1 : 0)}
+                                    <ArrowBigUp size={18} fill={post.upvoted ? '#5865f2' : 'none'} />
+                                    {post.upvotes}
                                 </motion.button>
 
                                 <button style={{
@@ -170,6 +286,7 @@ export default function PostDetail() {
                                     padding: '6px 14px', borderRadius: '4px',
                                     background: 'rgba(255,255,255,0.04)',
                                     color: '#b5bac1', fontSize: '13px',
+                                    border: 'none', cursor: 'default',
                                 }}>
                                     <MessageSquare size={16} /> {post.commentCount}
                                 </button>
@@ -179,7 +296,10 @@ export default function PostDetail() {
                                     padding: '6px 14px', borderRadius: '4px',
                                     background: 'rgba(255,255,255,0.04)',
                                     color: '#b5bac1', fontSize: '13px',
-                                }}>
+                                    border: 'none', cursor: 'pointer',
+                                }}
+                                    onClick={() => navigator.clipboard?.writeText(window.location.href)}
+                                >
                                     <Share2 size={16} /> Share
                                 </button>
 
@@ -188,6 +308,7 @@ export default function PostDetail() {
                                     padding: '6px 14px', borderRadius: '4px',
                                     background: 'rgba(255,255,255,0.04)',
                                     color: '#b5bac1', fontSize: '13px',
+                                    border: 'none', cursor: 'pointer',
                                 }}>
                                     <Flag size={16} /> Report
                                 </button>
@@ -213,12 +334,14 @@ export default function PostDetail() {
                 )}
 
                 {/* Verification Poll (if pending verification) */}
-                {post.state === 'pending_verification' && post.adminResponse && (
+                {post.state === 'pending_verification' && post.verification && (
                     <div style={{ padding: '0 20px 16px' }}>
                         <VerificationPoll
-                            adminResponse={post.adminResponse}
-                            deadline={post.verificationDeadline || '2026-03-01T12:00:00Z'}
-                            votes={post.verificationVotes || { yes: 0, no: 0 }}
+                            adminResponse={post.verification.resolutionDescription || post.adminResponse}
+                            deadline={post.verification.deadline}
+                            votes={{ yes: post.verification.yesCount, no: post.verification.noCount }}
+                            userVote={post.verification.userVote}
+                            onVote={handleVerificationVote}
                         />
                     </div>
                 )}
@@ -234,7 +357,7 @@ export default function PostDetail() {
                             borderLeft: '3px solid #23a559',
                         }}>
                             <div style={{ fontSize: '11px', fontWeight: 700, color: '#23a559', textTransform: 'uppercase', marginBottom: '6px' }}>
-                                🏛️ Admin Response
+                                Admin Response
                             </div>
                             <p style={{ fontSize: '14px', color: '#dcddde', lineHeight: 1.5 }}>
                                 {post.adminResponse}
@@ -250,10 +373,14 @@ export default function PostDetail() {
                 }}>
                     <div style={{ padding: '0 20px 12px' }}>
                         <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#f2f3f5' }}>
-                            Comments ({postComments.length})
+                            Comments ({comments.length})
                         </h3>
                     </div>
-                    <ThreadedComments comments={postComments} />
+                    <ThreadedComments
+                        comments={comments}
+                        onReply={handleReply}
+                        onUpvote={handleCommentUpvote}
+                    />
                 </div>
 
                 {/* Spacer */}
@@ -278,6 +405,7 @@ export default function PostDetail() {
                         type="text"
                         value={commentText}
                         onChange={(e) => setCommentText(e.target.value)}
+                        onKeyDown={handleKeyDown}
                         placeholder="Add a comment..."
                         style={{
                             flex: 1,
@@ -286,15 +414,21 @@ export default function PostDetail() {
                             color: '#f2f3f5',
                             fontSize: '14px',
                             padding: '4px 0',
+                            outline: 'none',
                         }}
                     />
                     <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
+                        onClick={handleCommentSubmit}
+                        disabled={submittingComment || !commentText.trim()}
                         style={{
                             display: 'flex',
-                            color: commentText ? '#5865f2' : '#949ba4',
+                            color: commentText.trim() ? '#5865f2' : '#949ba4',
                             transition: 'color 0.15s',
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: commentText.trim() ? 'pointer' : 'default',
                         }}
                     >
                         <Send size={18} />

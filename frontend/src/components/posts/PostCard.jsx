@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+﻿import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowBigUp, MessageSquare, Clock } from 'lucide-react';
 import StateBadge from '../ui/StateBadge';
@@ -35,7 +35,7 @@ export default function PostCard({ post }) {
                 width: '40px',
                 height: '40px',
                 borderRadius: '50%',
-                background: `hsl(${post.author.charCodeAt(5) * 30}, 60%, 45%)`,
+                background: `hsl(${post.authorAvatarHue || 0}, 60%, 45%)`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -44,7 +44,7 @@ export default function PostCard({ post }) {
                 color: '#fff',
                 flexShrink: 0,
             }}>
-                {post.author.slice(5, 7)}
+                {post.author?.slice(0, 2)}
             </div>
 
             {/* Content */}
@@ -92,7 +92,7 @@ export default function PostCard({ post }) {
                 </p>
 
                 {/* Tags */}
-                {post.tags && (
+                {post.tags && post.tags.length > 0 && (
                     <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '10px' }}>
                         {post.tags.map(tag => (
                             <span key={tag} style={{
@@ -122,11 +122,11 @@ export default function PostCard({ post }) {
                         gap: '4px',
                         padding: '4px 10px',
                         borderRadius: '4px',
-                        background: 'rgba(255,255,255,0.04)',
+                        background: post.upvoted ? 'rgba(88,101,242,0.15)' : 'rgba(255,255,255,0.04)',
                         fontSize: '13px',
-                        color: '#b5bac1',
+                        color: post.upvoted ? '#5865f2' : '#b5bac1',
                     }}>
-                        <ArrowBigUp size={16} color="#5865f2" />
+                        <ArrowBigUp size={16} color="#5865f2" fill={post.upvoted ? '#5865f2' : 'none'} />
                         <span style={{ fontWeight: 600 }}>{post.upvotes}</span>
                     </div>
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Mail, Lock, AlertCircle, Loader } from 'lucide-react';
@@ -46,35 +46,52 @@ export default function RegisterPage() {
         }
     };
 
-    const handleGoogleRegister = async () => {
-        setError('');
-        setLoading(true);
-        try {
-            const client = window.google?.accounts?.id;
-            if (!client) {
-                setError('Google Sign-In not loaded. Please refresh the page.');
-                setLoading(false);
-                return;
-            }
-            window.google.accounts.id.initialize({
-                client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
-                callback: async (response) => {
-                    try {
-                        await loginWithGoogle(response.credential);
-                        navigate('/channels/curriculum');
-                    } catch (err) {
-                        setError(err.response?.data?.error || 'Google sign-up failed. Only @iitj.ac.in emails allowed.');
-                        setLoading(false);
-                    }
-                },
-            });
-            window.google.accounts.id.prompt();
-            setLoading(false);
-        } catch (err) {
-            setError('Google sign-up failed');
-            setLoading(false);
+    // ─── Google Sign-Up via renderButton (avoids FedCM) ─────
+    const googleBtnRef = useRef(null);
+    const googleInitialized = useRef(false);
+
+    const initializeGoogle = useCallback(() => {
+        const gsi = window.google?.accounts?.id;
+        if (!gsi || !googleBtnRef.current || googleInitialized.current) return;
+        googleInitialized.current = true;
+
+        gsi.initialize({
+            client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
+            use_fedcm_for_prompt: false,
+            callback: async (response) => {
+                setLoading(true);
+                try {
+                    await loginWithGoogle(response.credential);
+                    navigate('/channels/curriculum');
+                } catch (err) {
+                    setError(err.response?.data?.error || 'Google sign-up failed. Only @iitj.ac.in emails allowed.');
+                    setLoading(false);
+                }
+            },
+        });
+
+        gsi.renderButton(googleBtnRef.current, {
+            theme: 'filled_black',
+            size: 'large',
+            width: 360,
+            text: 'signup_with',
+            shape: 'rectangular',
+        });
+    }, [loginWithGoogle, navigate]);
+
+    useEffect(() => {
+        if (window.google?.accounts?.id) {
+            initializeGoogle();
+        } else {
+            const interval = setInterval(() => {
+                if (window.google?.accounts?.id) {
+                    initializeGoogle();
+                    clearInterval(interval);
+                }
+            }, 200);
+            return () => clearInterval(interval);
         }
-    };
+    }, [initializeGoogle]);
 
     return (
         <div style={{
@@ -191,31 +208,14 @@ export default function RegisterPage() {
                     </motion.div>
                 )}
 
-                {/* Google Sign Up — Primary */}
-                <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleGoogleRegister}
-                    disabled={loading}
-                    style={{
-                        width: '100%',
-                        padding: '12px',
-                        borderRadius: '4px',
-                        background: '#fff',
-                        color: '#1a1b1e',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '10px',
-                        marginBottom: '16px',
-                        opacity: loading ? 0.7 : 1,
-                    }}
-                >
-                    <svg width="18" height="18" viewBox="0 0 18 18"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/><path d="M3.964 10.706A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.038l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.962L3.964 7.294C4.672 5.166 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
-                    Sign up with Google (@iitj.ac.in)
-                </motion.button>
+                {/* Google Sign Up — rendered by GIS */}
+                <div ref={googleBtnRef} style={{ display: 'flex', justifyContent: 'center', minHeight: 44, marginBottom: '16px' }} />
+                {loading && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#b5bac1', fontSize: 13, marginBottom: 16 }}>
+                        <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                        Signing up…
+                    </div>
+                )}
 
                 {/* Divider */}
                 <div style={{

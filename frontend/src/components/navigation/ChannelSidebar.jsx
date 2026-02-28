@@ -1,17 +1,37 @@
-import { useState } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Hash, Plus, Search } from 'lucide-react';
-import { channels, currentUser, posts } from '../../data/mockData';
+import { useAuth } from '../../contexts/AuthContext';
+import api from '../../services/api';
 
 export default function ChannelSidebar() {
     const navigate = useNavigate();
     const location = useLocation();
+    const { user } = useAuth();
 
-    // Track expanded categories — all start expanded
-    const [expanded, setExpanded] = useState(
-        channels.reduce((acc, cat) => ({ ...acc, [cat.id]: true }), {})
-    );
+    const [channels, setChannels] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [expanded, setExpanded] = useState({});
+
+    useEffect(() => {
+        async function fetchChannels() {
+            try {
+                const res = await api.get('/channels');
+                const data = res.data.channels;
+                setChannels(data);
+                const expandState = {};
+                data.forEach(cat => { expandState[cat.id] = true; });
+                setExpanded(expandState);
+            } catch (err) {
+                console.error('Failed to load channels:', err);
+            } finally {
+                setLoading(false);
+            }
+        }
+        fetchChannels();
+    }, []);
 
     const toggleCategory = (catId) => {
         setExpanded(prev => ({ ...prev, [catId]: !prev[catId] }));
@@ -19,9 +39,12 @@ export default function ChannelSidebar() {
 
     const isActiveChannel = (channelId) => location.pathname.includes(channelId);
 
-    // Count active posts per subchannel
-    const getPostCount = (channelId) =>
-        posts.filter(p => p.channelId === channelId && p.state !== 'resolved').length;
+    const filteredChannels = channels.map(cat => ({
+        ...cat,
+        subChannels: cat.subChannels.filter(sub =>
+            sub.name.toLowerCase().includes(searchQuery.toLowerCase())
+        ),
+    })).filter(cat => cat.subChannels.length > 0);
 
     return (
         <div style={{
@@ -51,7 +74,7 @@ export default function ChannelSidebar() {
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
                 }}>
-                    🎓 IIT Jodhpur
+                    IIT Jodhpur
                 </span>
                 <ChevronDown size={16} color="#b5bac1" />
             </div>
@@ -65,10 +88,23 @@ export default function ChannelSidebar() {
                     padding: '6px 8px',
                     background: '#0d0e10',
                     borderRadius: '4px',
-                    cursor: 'text',
                 }}>
                     <Search size={14} color="#949ba4" />
-                    <span style={{ fontSize: '12px', color: '#949ba4' }}>Search channels...</span>
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search channels..."
+                        style={{
+                            flex: 1,
+                            fontSize: '12px',
+                            color: '#f2f3f5',
+                            background: 'transparent',
+                            border: 'none',
+                            outline: 'none',
+                            padding: 0,
+                        }}
+                    />
                 </div>
             </div>
 
@@ -78,9 +114,14 @@ export default function ChannelSidebar() {
                 overflowY: 'auto',
                 padding: '8px 0',
             }}>
-                {channels.map((category) => (
+                {loading && (
+                    <div style={{ padding: '24px', textAlign: 'center', color: '#949ba4', fontSize: '13px' }}>
+                        Loading channels...
+                    </div>
+                )}
+
+                {filteredChannels.map((category) => (
                     <div key={category.id} style={{ marginBottom: '4px' }}>
-                        {/* Category header — expandable */}
                         <button
                             onClick={() => toggleCategory(category.id)}
                             style={{
@@ -96,9 +137,11 @@ export default function ChannelSidebar() {
                                 letterSpacing: '0.05em',
                                 cursor: 'pointer',
                                 transition: 'color 0.15s',
+                                background: 'transparent',
+                                border: 'none',
                             }}
-                            onMouseEnter={(e) => e.target.style.color = '#f2f3f5'}
-                            onMouseLeave={(e) => e.target.style.color = '#949ba4'}
+                            onMouseEnter={(e) => e.currentTarget.style.color = '#f2f3f5'}
+                            onMouseLeave={(e) => e.currentTarget.style.color = '#949ba4'}
                         >
                             <motion.span
                                 animate={{ rotate: expanded[category.id] ? 0 : -90 }}
@@ -109,7 +152,6 @@ export default function ChannelSidebar() {
                             </motion.span>
                             {category.icon} {category.name}
 
-                            {/* Add channel button */}
                             <motion.span
                                 whileHover={{ scale: 1.2 }}
                                 style={{
@@ -124,7 +166,6 @@ export default function ChannelSidebar() {
                             </motion.span>
                         </button>
 
-                        {/* Sub-channels — expand/collapse */}
                         <AnimatePresence initial={false}>
                             {expanded[category.id] && (
                                 <motion.div
@@ -136,7 +177,6 @@ export default function ChannelSidebar() {
                                 >
                                     {category.subChannels.map((channel) => {
                                         const active = isActiveChannel(channel.id);
-                                        const count = getPostCount(channel.id);
 
                                         return (
                                             <motion.button
@@ -158,6 +198,7 @@ export default function ChannelSidebar() {
                                                     background: active ? '#2e3035' : 'transparent',
                                                     transition: 'color 0.15s',
                                                     cursor: 'pointer',
+                                                    border: 'none',
                                                 }}
                                             >
                                                 <Hash size={16} style={{
@@ -167,7 +208,7 @@ export default function ChannelSidebar() {
                                                 <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                     {channel.name}
                                                 </span>
-                                                {count > 0 && (
+                                                {channel.activePostCount > 0 && (
                                                     <span style={{
                                                         fontSize: '10px',
                                                         fontWeight: 700,
@@ -178,7 +219,7 @@ export default function ChannelSidebar() {
                                                         minWidth: '18px',
                                                         textAlign: 'center',
                                                     }}>
-                                                        {count}
+                                                        {channel.activePostCount}
                                                     </span>
                                                 )}
                                             </motion.button>
@@ -204,7 +245,9 @@ export default function ChannelSidebar() {
                     width: '32px',
                     height: '32px',
                     borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #5865f2, #eb459e)',
+                    background: user
+                        ? `hsl(${user.avatarHue || 0}, 60%, 45%)`
+                        : 'linear-gradient(135deg, #5865f2, #eb459e)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -212,7 +255,7 @@ export default function ChannelSidebar() {
                     fontWeight: 700,
                     color: '#fff',
                 }}>
-                    {currentUser.pseudonym.slice(0, 2)}
+                    {user?.pseudonym?.slice(0, 2) || '??'}
                 </div>
                 <div style={{ flex: 1, overflow: 'hidden' }}>
                     <div style={{
@@ -223,7 +266,7 @@ export default function ChannelSidebar() {
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
                     }}>
-                        {currentUser.pseudonym}
+                        {user?.pseudonym || 'Anonymous'}
                     </div>
                     <div style={{
                         fontSize: '11px',
@@ -232,7 +275,7 @@ export default function ChannelSidebar() {
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
                     }}>
-                        {currentUser.role}
+                        {user?.role || 'student'}
                     </div>
                 </div>
                 <div style={{

@@ -1,18 +1,51 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Hash, Send } from 'lucide-react';
-import { channels } from '../../data/mockData';
+import { X, Send, Loader } from 'lucide-react';
+import api from '../../services/api';
 
-export default function CreatePostModal({ isOpen, onClose, defaultChannel = '' }) {
+export default function CreatePostModal({ isOpen, onClose, onCreated, defaultChannel = '', channels = [] }) {
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [channel, setChannel] = useState(defaultChannel);
     const [tags, setTags] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState('');
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        // Mock submit
-        onClose();
+        setError('');
+
+        if (!title.trim() || !content.trim() || !channel) {
+            setError('Title, description, and channel are required.');
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            const tagArray = tags
+                .split(',')
+                .map(t => t.trim())
+                .filter(Boolean);
+
+            await api.post('/posts', {
+                title: title.trim(),
+                content: content.trim(),
+                channelId: channel,
+                tags: tagArray,
+            });
+
+            // Reset form
+            setTitle('');
+            setContent('');
+            setTags('');
+            setError('');
+
+            onCreated?.();
+        } catch (err) {
+            setError(err.response?.data?.error || 'Failed to submit grievance. Please try again.');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -74,6 +107,9 @@ export default function CreatePostModal({ isOpen, onClose, defaultChannel = '' }
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         color: '#b5bac1',
+                                        background: 'transparent',
+                                        border: 'none',
+                                        cursor: 'pointer',
                                     }}
                                 >
                                     <X size={20} />
@@ -88,6 +124,19 @@ export default function CreatePostModal({ isOpen, onClose, defaultChannel = '' }
                                 gap: '16px',
                                 overflowY: 'auto',
                             }}>
+                                {error && (
+                                    <div style={{
+                                        padding: '10px 14px',
+                                        background: 'rgba(218,55,60,0.1)',
+                                        border: '1px solid rgba(218,55,60,0.3)',
+                                        borderRadius: '4px',
+                                        color: '#da373c',
+                                        fontSize: '13px',
+                                    }}>
+                                        {error}
+                                    </div>
+                                )}
+
                                 {/* Channel select */}
                                 <div>
                                     <label style={{
@@ -197,14 +246,15 @@ export default function CreatePostModal({ isOpen, onClose, defaultChannel = '' }
 
                                 {/* Submit */}
                                 <motion.button
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
+                                    whileHover={{ scale: submitting ? 1 : 1.02 }}
+                                    whileTap={{ scale: submitting ? 1 : 0.98 }}
                                     type="submit"
+                                    disabled={submitting}
                                     style={{
                                         width: '100%',
                                         padding: '12px',
                                         borderRadius: '4px',
-                                        background: '#5865f2',
+                                        background: submitting ? '#4752c4' : '#5865f2',
                                         color: '#fff',
                                         fontSize: '14px',
                                         fontWeight: 600,
@@ -213,11 +263,16 @@ export default function CreatePostModal({ isOpen, onClose, defaultChannel = '' }
                                         justifyContent: 'center',
                                         gap: '8px',
                                         transition: 'background 0.15s',
+                                        border: 'none',
+                                        cursor: submitting ? 'default' : 'pointer',
+                                        opacity: submitting ? 0.7 : 1,
                                     }}
-                                    onMouseEnter={(e) => e.target.style.background = '#4752c4'}
-                                    onMouseLeave={(e) => e.target.style.background = '#5865f2'}
                                 >
-                                    <Send size={16} /> Submit Grievance
+                                    {submitting ? (
+                                        <><Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Submitting...</>
+                                    ) : (
+                                        <><Send size={16} /> Submit Grievance</>
+                                    )}
                                 </motion.button>
                             </form>
 
@@ -228,7 +283,7 @@ export default function CreatePostModal({ isOpen, onClose, defaultChannel = '' }
                                 fontSize: '11px',
                                 color: '#949ba4',
                             }}>
-                                🔒 Your identity is protected. You will post as your pseudonym.
+                                Your identity is protected. You will post as your pseudonym.
                             </div>
                         </motion.div>
                     </motion.div>

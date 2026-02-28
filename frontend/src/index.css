@@ -249,6 +249,16 @@ body {
   }
 }
 
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .animate-pulse-red {
   animation: pulse-red 2s infinite;
 }

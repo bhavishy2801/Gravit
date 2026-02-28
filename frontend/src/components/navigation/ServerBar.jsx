@@ -1,13 +1,27 @@
+﻿import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { BarChart3, Settings, LogOut, User } from 'lucide-react';
-import { channels } from '../../data/mockData';
 import { useAuth } from '../../contexts/AuthContext';
+import api from '../../services/api';
 
 export default function ServerBar() {
     const navigate = useNavigate();
     const location = useLocation();
     const { logout } = useAuth();
+    const [channels, setChannels] = useState([]);
+
+    useEffect(() => {
+        async function fetchChannels() {
+            try {
+                const res = await api.get('/channels');
+                setChannels(res.data.channels);
+            } catch (err) {
+                console.error('Failed to load channels for server bar:', err);
+            }
+        }
+        fetchChannels();
+    }, []);
 
     const isActive = (path) => location.pathname.startsWith(path);
 
@@ -44,6 +58,8 @@ export default function ServerBar() {
                     color: '#fff',
                     transition: 'border-radius 0.2s',
                     position: 'relative',
+                    border: 'none',
+                    cursor: 'pointer',
                 }}
             >
                 G
@@ -95,6 +111,8 @@ export default function ServerBar() {
                             fontSize: '22px',
                             transition: 'border-radius 0.2s, background 0.2s',
                             position: 'relative',
+                            border: 'none',
+                            cursor: 'pointer',
                         }}
                     >
                         {cat.icon}
@@ -140,6 +158,8 @@ export default function ServerBar() {
                     justifyContent: 'center',
                     color: isActive('/dashboard') ? '#fff' : '#23a559',
                     transition: 'border-radius 0.2s, background 0.2s',
+                    border: 'none',
+                    cursor: 'pointer',
                 }}
             >
                 <BarChart3 size={22} />
@@ -165,6 +185,8 @@ export default function ServerBar() {
                     color: isActive('/profile') ? '#fff' : '#b5bac1',
                     transition: 'border-radius 0.2s, background 0.2s',
                     marginBottom: '4px',
+                    border: 'none',
+                    cursor: 'pointer',
                 }}
             >
                 <User size={20} />
@@ -186,6 +208,8 @@ export default function ServerBar() {
                     justifyContent: 'center',
                     color: '#b5bac1',
                     marginBottom: '4px',
+                    border: 'none',
+                    cursor: 'pointer',
                 }}
             >
                 <Settings size={20} />
@@ -207,6 +231,8 @@ export default function ServerBar() {
                     justifyContent: 'center',
                     color: '#da373c',
                     marginBottom: '12px',
+                    border: 'none',
+                    cursor: 'pointer',
                 }}
             >
                 <LogOut size={20} />

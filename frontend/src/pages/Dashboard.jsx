@@ -1,31 +1,79 @@
+﻿import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { TrendingUp, AlertTriangle, CheckCircle, Clock, Users, Shield, Timer, Award } from 'lucide-react';
-import { dashboardStats, leaderboard, posts } from '../data/mockData';
-
-const statCards = [
-    { label: 'Total Grievances', value: dashboardStats.totalPosts, icon: TrendingUp, color: '#5865f2', bg: 'rgba(88,101,242,0.1)' },
-    { label: 'Escalated (Active)', value: dashboardStats.escalatedActive, icon: AlertTriangle, color: '#da373c', bg: 'rgba(218,55,60,0.1)' },
-    { label: 'Resolved This Month', value: dashboardStats.resolvedThisMonth, icon: CheckCircle, color: '#23a559', bg: 'rgba(35,165,89,0.1)' },
-    { label: 'Pending Verification', value: dashboardStats.pendingVerification, icon: Clock, color: '#f0b232', bg: 'rgba(240,178,50,0.1)' },
-    { label: 'Avg. Resolution Time', value: dashboardStats.avgResolutionTime, icon: Timer, color: '#e67e22', bg: 'rgba(230,126,34,0.1)' },
-    { label: 'DMS Triggered', value: dashboardStats.dmsTriggered, icon: Shield, color: '#ed4245', bg: 'rgba(237,66,69,0.1)' },
-    { label: 'Verification Success', value: dashboardStats.verificationSuccessRate, icon: Award, color: '#23a559', bg: 'rgba(35,165,89,0.1)' },
-    { label: 'Active Users', value: dashboardStats.activeUsers, icon: Users, color: '#5865f2', bg: 'rgba(88,101,242,0.1)' },
-];
+import { TrendingUp, AlertTriangle, CheckCircle, Clock, Users, Shield, Timer, Award, Loader } from 'lucide-react';
+import api from '../services/api';
 
 function getRankEmoji(rank) {
-    if (rank === 1) return '🥇';
-    if (rank === 2) return '🥈';
-    if (rank === 3) return '🥉';
+    if (rank === 1) return '';
+    if (rank === 2) return '';
+    if (rank === 3) return '';
     return `#${rank}`;
 }
 
+const statIcons = {
+    totalPosts: { icon: TrendingUp, color: '#5865f2', bg: 'rgba(88,101,242,0.1)' },
+    escalatedActive: { icon: AlertTriangle, color: '#da373c', bg: 'rgba(218,55,60,0.1)' },
+    resolvedThisMonth: { icon: CheckCircle, color: '#23a559', bg: 'rgba(35,165,89,0.1)' },
+    pendingVerification: { icon: Clock, color: '#f0b232', bg: 'rgba(240,178,50,0.1)' },
+    avgResolutionTime: { icon: Timer, color: '#e67e22', bg: 'rgba(230,126,34,0.1)' },
+    dmsTriggered: { icon: Shield, color: '#ed4245', bg: 'rgba(237,66,69,0.1)' },
+    verificationSuccessRate: { icon: Award, color: '#23a559', bg: 'rgba(35,165,89,0.1)' },
+    activeUsers: { icon: Users, color: '#5865f2', bg: 'rgba(88,101,242,0.1)' },
+};
+
+const statLabels = {
+    totalPosts: 'Total Grievances',
+    escalatedActive: 'Escalated (Active)',
+    resolvedThisMonth: 'Resolved This Month',
+    pendingVerification: 'Pending Verification',
+    avgResolutionTime: 'Avg. Resolution Time',
+    dmsTriggered: 'DMS Triggered',
+    verificationSuccessRate: 'Verification Success',
+    activeUsers: 'Active Users',
+};
+
 export default function Dashboard() {
-    // Get recent escalated posts for the feed
-    const escalatedPosts = posts
-        .filter(p => p.state === 'escalated' || p.state === 'resolution_rejected')
-        .sort((a, b) => b.urgencyScore - a.urgencyScore)
-        .slice(0, 5);
+    const navigate = useNavigate();
+    const [stats, setStats] = useState(null);
+    const [leaderboard, setLeaderboard] = useState([]);
+    const [escalations, setEscalations] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function fetchDashboard() {
+            try {
+                const [statsRes, leaderboardRes, escalationsRes] = await Promise.all([
+                    api.get('/dashboard/stats'),
+                    api.get('/dashboard/leaderboard'),
+                    api.get('/dashboard/escalations'),
+                ]);
+                setStats(statsRes.data.stats);
+                setLeaderboard(leaderboardRes.data.leaderboard);
+                setEscalations(escalationsRes.data.posts);
+            } catch (err) {
+                console.error('Failed to load dashboard:', err);
+            } finally {
+                setLoading(false);
+            }
+        }
+        fetchDashboard();
+    }, []);
+
+    if (loading) {
+        return (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#949ba4' }}>
+                <Loader size={24} style={{ animation: 'spin 1s linear infinite' }} />
+            </div>
+        );
+    }
+
+    const statCards = stats ? Object.entries(stats).map(([key, value]) => ({
+        key,
+        label: statLabels[key] || key,
+        value,
+        ...(statIcons[key] || { icon: TrendingUp, color: '#5865f2', bg: 'rgba(88,101,242,0.1)' }),
+    })) : [];
 
     return (
         <div style={{
@@ -43,7 +91,7 @@ export default function Dashboard() {
                 minHeight: '48px',
             }}>
                 <h1 style={{ fontSize: '20px', fontWeight: 700, color: '#f2f3f5', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    📊 Admin Dashboard
+                    Admin Dashboard
                 </h1>
                 <p style={{ fontSize: '13px', color: '#949ba4', marginTop: '2px' }}>
                     Institutional performance metrics & accountability tracker
@@ -67,7 +115,7 @@ export default function Dashboard() {
                         const Icon = stat.icon;
                         return (
                             <motion.div
-                                key={stat.label}
+                                key={stat.key}
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: idx * 0.05 }}
@@ -128,7 +176,6 @@ export default function Dashboard() {
                             </span>
                         </div>
                         <div>
-                            {/* Table header */}
                             <div style={{
                                 display: 'grid',
                                 gridTemplateColumns: '40px 1fr 70px 70px 60px 50px',
@@ -147,6 +194,11 @@ export default function Dashboard() {
                                 <span>Success</span>
                                 <span>DMS</span>
                             </div>
+                            {leaderboard.length === 0 && (
+                                <div style={{ padding: '24px', textAlign: 'center', color: '#949ba4', fontSize: '13px' }}>
+                                    No data yet
+                                </div>
+                            )}
                             {leaderboard.map((dept, idx) => (
                                 <motion.div
                                     key={dept.department}
@@ -211,12 +263,18 @@ export default function Dashboard() {
                             </span>
                         </div>
                         <div>
-                            {escalatedPosts.map((post, idx) => (
+                            {escalations.length === 0 && (
+                                <div style={{ padding: '24px', textAlign: 'center', color: '#949ba4', fontSize: '13px' }}>
+                                    No active escalations
+                                </div>
+                            )}
+                            {escalations.map((post, idx) => (
                                 <motion.div
                                     key={post.id}
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
                                     transition={{ delay: 0.4 + idx * 0.05 }}
+                                    onClick={() => navigate(`/posts/${post.id}`)}
                                     style={{
                                         padding: '12px 16px',
                                         borderBottom: '1px solid rgba(255,255,255,0.04)',
@@ -230,7 +288,6 @@ export default function Dashboard() {
                                             width: '8px', height: '8px',
                                             borderRadius: '50%',
                                             background: post.urgencyScore >= 55 ? '#da373c' : '#e67e22',
-                                            animation: post.urgencyScore >= 55 ? 'pulse-red 2s infinite' : 'none',
                                         }} />
                                         <span style={{ fontSize: '12px', fontWeight: 600, color: '#da373c' }}>
                                             Level {post.escalationLevel}
@@ -246,7 +303,7 @@ export default function Dashboard() {
                                         {post.title}
                                     </p>
                                     <div style={{ fontSize: '11px', color: '#949ba4', marginTop: '4px' }}>
-                                        #{post.channelId} · {post.upvotes} upvotes · {post.commentCount} comments
+                                        #{post.channelId}  {post.upvotes} upvotes  {post.commentCount} comments
                                     </div>
                                 </motion.div>
                             ))}
@@ -268,7 +325,7 @@ export default function Dashboard() {
                     }}
                 >
                     <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#f2f3f5', marginBottom: '16px' }}>
-                        📋 Post Lifecycle Pipeline
+                        Post Lifecycle Pipeline
                     </h3>
                     <div style={{
                         display: 'flex',
@@ -280,30 +337,30 @@ export default function Dashboard() {
                     }}>
                         {[
                             { label: 'Open', color: '#949ba4' },
-                            { label: '→', color: '#3f4147' },
+                            { label: '\u2192', color: '#3f4147' },
                             { label: 'Trending', color: '#f0b232' },
-                            { label: '→', color: '#3f4147' },
+                            { label: '\u2192', color: '#3f4147' },
                             { label: 'Escalated', color: '#da373c' },
-                            { label: '→', color: '#3f4147' },
+                            { label: '\u2192', color: '#3f4147' },
                             { label: 'Pending Verification', color: '#5865f2' },
-                            { label: '→', color: '#3f4147' },
-                            { label: 'Resolved ✅', color: '#23a559' },
+                            { label: '\u2192', color: '#3f4147' },
+                            { label: 'Resolved', color: '#23a559' },
                         ].map((step, idx) => (
                             <span key={idx} style={{
-                                padding: step.label === '→' ? '0' : '6px 14px',
+                                padding: step.label === '\u2192' ? '0' : '6px 14px',
                                 borderRadius: '100px',
                                 fontSize: '12px',
                                 fontWeight: 600,
-                                color: step.label === '→' ? '#3f4147' : '#fff',
-                                background: step.label === '→' ? 'transparent' : `${step.color}22`,
-                                border: step.label === '→' ? 'none' : `1px solid ${step.color}44`,
+                                color: step.label === '\u2192' ? '#3f4147' : '#fff',
+                                background: step.label === '\u2192' ? 'transparent' : `${step.color}22`,
+                                border: step.label === '\u2192' ? 'none' : `1px solid ${step.color}44`,
                             }}>
                                 {step.label}
                             </span>
                         ))}
                     </div>
                     <div style={{ textAlign: 'center', fontSize: '11px', color: '#949ba4', marginTop: '8px' }}>
-                        ↻ Resolution Rejected → Auto re-escalate at next hierarchy level
+                        Resolution Rejected auto re-escalates at next hierarchy level
                     </div>
                 </motion.div>
             </div>
