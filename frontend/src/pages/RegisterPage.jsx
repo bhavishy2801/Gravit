@@ -52,11 +52,16 @@ export default function RegisterPage() {
 
     const initializeGoogle = useCallback(() => {
         const gsi = window.google?.accounts?.id;
+        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
         if (!gsi || !googleBtnRef.current || googleInitialized.current) return;
+        if (!clientId) {
+            setError('Google Sign-In is not configured. Please set VITE_GOOGLE_CLIENT_ID.');
+            return;
+        }
         googleInitialized.current = true;
 
         gsi.initialize({
-            client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
+            client_id: clientId,
             use_fedcm_for_prompt: false,
             callback: async (response) => {
                 setLoading(true);

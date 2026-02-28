@@ -36,6 +36,9 @@ services:
       - key: GOOGLE_CLIENT_ID
         sync: false       # set manually after OAuth setup
 
+      - key: VITE_GOOGLE_CLIENT_ID
+        sync: false       # set same value as GOOGLE_CLIENT_ID (needed at frontend build time)
+
       - key: ALLOWED_DOMAIN
         value: iitj.ac.in
 

@@ -10,8 +10,10 @@ const __dirname = dirname(__filename);
 const { Pool } = pg;
 
 async function initDatabase() {
+  const isProduction = process.env.NODE_ENV === 'production';
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/gravit',
+    ...(isProduction && { ssl: { rejectUnauthorized: false } }),
   });
 
   try {

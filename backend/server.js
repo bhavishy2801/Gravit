@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-import { connectPostgres, getPool } from './config/database.js';
+import { connectPostgres, getPool, initSchema } from './config/database.js';
 import { connectMongo } from './config/mongodb.js';
 import { setupSocketHandlers } from './socket/handlers.js';
 import { startCronJobs } from './cron/index.js';
@@ -49,10 +49,10 @@ app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Rate limiting
+// Rate limiting (relaxed in development)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
-  max: 200,
+  max: process.env.NODE_ENV === 'production' ? 200 : 10000,
   message: { error: 'Too many requests, please try again later.' },
 });
 app.use('/api/', limiter);
@@ -104,6 +104,13 @@ async function start() {
     // Connect databases
     await connectPostgres();
     console.log('✅ PostgreSQL connected');
+
+    // Ensure tables exist (safe — uses CREATE IF NOT EXISTS)
+    await initSchema();
+
+    // Seed institution & channels if missing
+    const { seedIfEmpty } = await import('./db/seed.js');
+    await seedIfEmpty(getPool());
 
     await connectMongo();
     console.log('✅ MongoDB connected');

@@ -5,16 +5,31 @@ import { generatePseudonym } from '../services/pseudonym.js';
 
 const { Pool } = pg;
 
-async function seed() {
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/gravit',
-  });
-
+/**
+ * Seed the database using an existing pool (called from server startup).
+ * Only inserts rows that don't already exist (ON CONFLICT DO NOTHING).
+ */
+export async function seedIfEmpty(pool) {
   try {
-    console.log('🌱 Seeding database...');
+    // Quick check — if institution already exists, skip heavy seeding
+    const check = await pool.query("SELECT id FROM institutions WHERE domain = 'iitj.ac.in'");
+    if (check.rows.length > 0) {
+      console.log('✅ Seed data already present — skipping');
+      return;
+    }
 
-    // ─── Institution ─────────────────────────────
-    const salt = process.env.INSTITUTION_SALT || 'gravit-iitj-salt-2026';
+    console.log('🌱 Seeding database...');
+    await runSeed(pool);
+    console.log('🎉 Seed complete!');
+  } catch (err) {
+    console.error('❌ Seed check failed:', err.message);
+    // Non-fatal — server can still start
+  }
+}
+
+async function runSeed(pool) {
+  // ─── Institution ─────────────────────────────
+  const salt = process.env.INSTITUTION_SALT || 'gravit-iitj-salt-2026';
     const instResult = await pool.query(`
       INSERT INTO institutions (name, domain, salt)
       VALUES ($1, $2, $3)
@@ -134,14 +149,15 @@ async function seed() {
     }
     console.log('  ✅ Demo users created (password: demo123)');
     console.log('     student@iitj.ac.in / moderator@iitj.ac.in / admin@iitj.ac.in');
-
-    console.log('\n🎉 Seed complete!');
-  } catch (err) {
-    console.error('❌ Seed failed:', err);
-    throw err;
-  } finally {
-    await pool.end();
-  }
 }
 
-seed().catch(() => process.exit(1));
+// ─── Standalone CLI usage: node db/seed.js ──────────
+const isDirectRun = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/'));
+if (isDirectRun) {
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/gravit',
+  });
+  runSeed(pool)
+    .then(() => { console.log('🎉 Seed complete!'); pool.end(); })
+    .catch(() => { pool.end(); process.exit(1); });
+}
