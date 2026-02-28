@@ -4,7 +4,7 @@ import { User, Mail, Phone, Key, CheckCircle, AlertCircle, Loader, Save } from '
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
 
-const VALID_HOSTELS = ['B1','B2','B3','B4','B5','G1','G2','G3','G4','G5','G6','I2','I3','O3','O4','Y3','Y4'];
+const VALID_HOSTELS = ['B1', 'B2', 'B3', 'B4', 'B5', 'G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'I2', 'I3', 'O3', 'O4', 'Y3', 'Y4'];
 const VALID_GENDERS = ['male', 'female', 'non-binary', 'prefer-not-to-say'];
 const VALID_PROGRAMMES = ['B.Tech', 'M.Tech', 'M.Sc', 'Ph.D', 'MBA', 'M.Des', 'Other'];
 
@@ -202,7 +202,7 @@ export default function ProfilePage() {
               border: '1px solid rgba(255,255,255,0.06)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px', flexWrap: 'wrap' }}>
               <div style={{
                 width: '64px', height: '64px',
                 borderRadius: '50%',
@@ -226,7 +226,7 @@ export default function ProfilePage() {
                 }}>
                   {profile?.pseudonym}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
                   <span style={{
                     padding: '2px 10px',
                     borderRadius: '100px',

@@ -107,7 +107,7 @@ export default function Dashboard() {
                 {/* Stats grid */}
                 <div style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(4, 1fr)',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
                     gap: '12px',
                     marginBottom: '24px',
                 }}>
@@ -148,7 +148,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Two-column layout */}
-                <div style={{
+                <div className="responsive-grid" style={{
                     display: 'grid',
                     gridTemplateColumns: '1fr 1fr',
                     gap: '16px',
@@ -175,7 +175,7 @@ export default function Dashboard() {
                                 Department Leaderboard
                             </span>
                         </div>
-                        <div>
+                        <div style={{ overflowX: 'auto' }}>
                             <div style={{
                                 display: 'grid',
                                 gridTemplateColumns: '40px 1fr 70px 70px 60px 50px',
@@ -262,7 +262,7 @@ export default function Dashboard() {
                                 Critical Escalations
                             </span>
                         </div>
-                        <div>
+                        <div style={{ overflowX: 'auto' }}>
                             {escalations.length === 0 && (
                                 <div style={{ padding: '24px', textAlign: 'center', color: '#949ba4', fontSize: '13px' }}>
                                     No active escalations

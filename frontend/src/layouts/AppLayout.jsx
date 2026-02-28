@@ -1,9 +1,12 @@
 import { Outlet } from 'react-router-dom';
+import { useState } from 'react';
 import ServerBar from '../components/navigation/ServerBar';
 import ChannelSidebar from '../components/navigation/ChannelSidebar';
 import TopBar from '../components/navigation/TopBar';
 
 export default function AppLayout({ channelName, channelDescription }) {
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
     return (
         <div style={{
             display: 'flex',
@@ -11,11 +14,23 @@ export default function AppLayout({ channelName, channelDescription }) {
             height: '100vh',
             overflow: 'hidden',
         }}>
-            {/* Server bar (leftmost) */}
-            <ServerBar />
+            {/* Mobile Overlay */}
+            <div
+                className={`drawer-overlay ${isMobileMenuOpen ? 'open' : ''}`}
+                onClick={() => setIsMobileMenuOpen(false)}
+            />
 
-            {/* Channel sidebar */}
-            <ChannelSidebar />
+            {/* Sidebar Wrapper (Drawer on mobile) */}
+            <div
+                className={`sidebar-drawer ${isMobileMenuOpen ? 'open' : ''}`}
+                style={{ display: 'flex', height: '100%', zIndex: 50 }}
+            >
+                {/* Server bar (leftmost) */}
+                <ServerBar />
+
+                {/* Channel sidebar */}
+                <ChannelSidebar />
+            </div>
 
             {/* Main content area */}
             <div style={{
@@ -27,7 +42,11 @@ export default function AppLayout({ channelName, channelDescription }) {
                 background: '#1a1b1e',
             }}>
                 {/* Top bar */}
-                <TopBar channelName={channelName} description={channelDescription} />
+                <TopBar
+                    channelName={channelName}
+                    description={channelDescription}
+                    onMenuClick={() => setIsMobileMenuOpen(true)}
+                />
 
                 {/* Page content */}
                 <div style={{

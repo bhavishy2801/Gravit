@@ -114,6 +114,7 @@ export default function PostCard({ post }) {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '16px',
+                    flexWrap: 'wrap',
                 }}>
                     {/* Upvotes */}
                     <div style={{

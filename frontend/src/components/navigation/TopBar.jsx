@@ -1,7 +1,7 @@
-import { Hash, Search, Bell, HelpCircle, Users } from 'lucide-react';
+import { Hash, Search, Bell, HelpCircle, Users, Menu } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-export default function TopBar({ channelName = 'general', description = '' }) {
+export default function TopBar({ channelName = 'general', description = '', onMenuClick }) {
     return (
         <div style={{
             height: '48px',
@@ -13,6 +13,16 @@ export default function TopBar({ channelName = 'general', description = '' }) {
             padding: '0 16px',
             gap: '8px',
         }}>
+            {/* Mobile menu toggle */}
+            <motion.button
+                className="mobile-only"
+                whileHover={{ scale: 1.1, color: '#f2f3f5' }}
+                style={{ color: '#b5bac1', marginRight: '8px' }}
+                onClick={onMenuClick}
+            >
+                <Menu size={20} />
+            </motion.button>
+
             {/* Channel name */}
             <Hash size={20} color="#949ba4" />
             <span style={{
@@ -25,7 +35,7 @@ export default function TopBar({ channelName = 'general', description = '' }) {
             </span>
 
             {description && (
-                <>
+                <div className="hide-on-mobile" style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
                     <div style={{
                         width: '1px',
                         height: '24px',
@@ -42,7 +52,7 @@ export default function TopBar({ channelName = 'general', description = '' }) {
                     }}>
                         {description}
                     </span>
-                </>
+                </div>
             )}
 
             {/* Spacer */}
@@ -51,6 +61,7 @@ export default function TopBar({ channelName = 'general', description = '' }) {
             {/* Action icons */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <motion.button
+                    className="hide-on-mobile"
                     whileHover={{ scale: 1.1, color: '#f2f3f5' }}
                     style={{ display: 'flex', color: '#b5bac1' }}
                     title="Members"
@@ -59,7 +70,7 @@ export default function TopBar({ channelName = 'general', description = '' }) {
                 </motion.button>
 
                 {/* Search bar */}
-                <div style={{
+                <div className="hide-on-mobile" style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: '4px',
@@ -99,6 +110,7 @@ export default function TopBar({ channelName = 'general', description = '' }) {
                 </motion.button>
 
                 <motion.button
+                    className="hide-on-mobile"
                     whileHover={{ scale: 1.1, color: '#f2f3f5' }}
                     style={{ display: 'flex', color: '#b5bac1' }}
                     title="Help"
