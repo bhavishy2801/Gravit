@@ -60,7 +60,26 @@ router.get('/', optionalAuth, async (req, res, next) => {
 
     const channels = Object.values(categoryMap);
 
-    res.json({ channels });
+    // Filter hostel channels: students only see their own hostel
+    const userHostel = req.user?.hostel; // e.g. "B1"
+    const userRole = req.user?.role;
+    const filteredChannels = channels.filter(cat => {
+      // Non-hostel categories → always show
+      if (!cat.id.startsWith('hostel-')) return true;
+
+      // Admins & moderators → see all hostels
+      if (userRole === 'admin' || userRole === 'moderator') return true;
+
+      // Student with a hostel set → only their hostel
+      if (userHostel) {
+        return cat.id === `hostel-${userHostel.toLowerCase()}`;
+      }
+
+      // No hostel set or not logged in → hide hostel channels
+      return false;
+    });
+
+    res.json({ channels: filteredChannels });
   } catch (err) {
     next(err);
   }
