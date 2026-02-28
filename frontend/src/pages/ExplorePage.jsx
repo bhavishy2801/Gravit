@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Compass, Search, Users, Lock, Globe, ArrowRight, Loader } from 'lucide-react';
+import { Compass, Search, Users, Lock, Globe, ArrowRight, Loader, Key } from 'lucide-react';
 import api from '../services/api';
 
 export default function ExplorePage() {
@@ -13,6 +13,13 @@ export default function ExplorePage() {
     const [passwordModal, setPasswordModal] = useState(null);
     const [password, setPassword] = useState('');
     const [joinError, setJoinError] = useState('');
+
+    // Invite code join
+    const [inviteCode, setInviteCode] = useState('');
+    const [invitePassword, setInvitePassword] = useState('');
+    const [inviteJoining, setInviteJoining] = useState(false);
+    const [inviteError, setInviteError] = useState('');
+    const [inviteSuccess, setInviteSuccess] = useState('');
 
     useEffect(() => {
         fetchServers();
@@ -76,6 +83,30 @@ export default function ExplorePage() {
         }
     };
 
+    const handleInviteCodeJoin = async () => {
+        if (!inviteCode.trim()) return;
+        setInviteJoining(true);
+        setInviteError('');
+        setInviteSuccess('');
+        try {
+            const res = await api.post('/servers/join-by-code', {
+                inviteCode: inviteCode.trim(),
+                password: invitePassword || undefined,
+            });
+            setInviteSuccess(`Joined "${res.data.serverName}" successfully!`);
+            setInviteCode('');
+            setInvitePassword('');
+            fetchServers(searchQuery);
+            setTimeout(() => {
+                navigate(`/servers/${res.data.serverId}`);
+            }, 1000);
+        } catch (err) {
+            setInviteError(err.response?.data?.error || 'Failed to join');
+        } finally {
+            setInviteJoining(false);
+        }
+    };
+
     return (
         <div style={{
             flex: 1,
@@ -102,7 +133,7 @@ export default function ExplorePage() {
                 <div style={{
                     display: 'flex', alignItems: 'center', gap: '8px',
                     padding: '10px 14px', background: '#2b2d31',
-                    borderRadius: '8px', marginBottom: '24px',
+                    borderRadius: '8px', marginBottom: '16px',
                 }}>
                     <Search size={18} color="#949ba4" />
                     <input
@@ -115,6 +146,62 @@ export default function ExplorePage() {
                             color: '#f2f3f5', fontSize: '15px', outline: 'none',
                         }}
                     />
+                </div>
+
+                {/* Join by Invite Code */}
+                <div style={{
+                    background: '#2b2d31', borderRadius: '8px', padding: '16px',
+                    marginBottom: '24px', border: '1px solid rgba(255,255,255,0.04)',
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                        <Key size={16} color="#5865f2" />
+                        <span style={{ fontSize: '14px', fontWeight: 700, color: '#f2f3f5' }}>Join by Invite Code</span>
+                    </div>
+                    <p style={{ fontSize: '12px', color: '#949ba4', marginBottom: '12px' }}>
+                        Have an invite code? Enter it below to join a private or public server.
+                    </p>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <input
+                            type="text"
+                            value={inviteCode}
+                            onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                            placeholder="Invite Code"
+                            maxLength={8}
+                            style={{
+                                flex: '1 1 120px', padding: '8px 12px', background: '#1e1f22',
+                                border: '1px solid #3f4147', borderRadius: '6px',
+                                color: '#f2f3f5', fontSize: '14px', outline: 'none',
+                                fontFamily: 'monospace', letterSpacing: '0.1em',
+                            }}
+                        />
+                        <input
+                            type="password"
+                            value={invitePassword}
+                            onChange={(e) => setInvitePassword(e.target.value)}
+                            placeholder="Password (if private)"
+                            style={{
+                                flex: '1 1 140px', padding: '8px 12px', background: '#1e1f22',
+                                border: '1px solid #3f4147', borderRadius: '6px',
+                                color: '#f2f3f5', fontSize: '14px', outline: 'none',
+                            }}
+                        />
+                        <motion.button
+                            whileTap={{ scale: 0.95 }}
+                            onClick={handleInviteCodeJoin}
+                            disabled={inviteJoining || !inviteCode.trim()}
+                            style={{
+                                padding: '8px 20px', background: '#5865f2', color: '#fff',
+                                borderRadius: '6px', fontSize: '14px', fontWeight: 600,
+                                border: 'none', cursor: inviteCode.trim() ? 'pointer' : 'default',
+                                opacity: inviteCode.trim() ? 1 : 0.5,
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            {inviteJoining ? 'Joining...' : 'Join'}
+                        </motion.button>
+                    </div>
+                    {inviteError && <div style={{ fontSize: '13px', color: '#da373c', marginTop: '8px' }}>{inviteError}</div>}
+                    {inviteSuccess && <div style={{ fontSize: '13px', color: '#23a559', marginTop: '8px' }}>{inviteSuccess}</div>}
                 </div>
 
                 {/* Server Grid */}

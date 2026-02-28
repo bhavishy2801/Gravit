@@ -4,7 +4,7 @@ import { Hash, Search, Bell, HelpCircle, Users, Menu, X, ExternalLink, MessageCi
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../services/api';
 
-export default function TopBar({ channelName = 'general', description = '', onMenuClick }) {
+export default function TopBar({ channelName = 'general', description = '', onMenuClick, selectedServer }) {
     const navigate = useNavigate();
     const [unreadCount, setUnreadCount] = useState(0);
     const [searchOpen, setSearchOpen] = useState(false);
@@ -12,8 +12,24 @@ export default function TopBar({ channelName = 'general', description = '', onMe
     const [searchResults, setSearchResults] = useState([]);
     const [searching, setSearching] = useState(false);
     const [helpOpen, setHelpOpen] = useState(false);
+    const [membersOpen, setMembersOpen] = useState(false);
+    const [members, setMembers] = useState([]);
+    const [membersLoading, setMembersLoading] = useState(false);
     const searchInputRef = useRef(null);
     const searchTimerRef = useRef(null);
+
+    const serverId = selectedServer?.startsWith?.('server-') ? selectedServer.replace('server-', '') : null;
+
+    const openMembers = async () => {
+        if (!serverId) return;
+        setMembersOpen(true);
+        setMembersLoading(true);
+        try {
+            const res = await api.get(`/servers/${serverId}/members`);
+            setMembers(res.data.members || []);
+        } catch { setMembers([]); }
+        finally { setMembersLoading(false); }
+    };
 
     useEffect(() => {
         async function fetchUnread() {
@@ -131,8 +147,9 @@ export default function TopBar({ channelName = 'general', description = '', onMe
                 <motion.button
                     className="hide-on-mobile"
                     whileHover={{ scale: 1.1, color: '#f2f3f5' }}
-                    style={{ display: 'flex', color: '#b5bac1' }}
-                    title="Members"
+                    onClick={openMembers}
+                    style={{ display: 'flex', color: '#b5bac1', background: 'none', border: 'none', cursor: serverId ? 'pointer' : 'default', opacity: serverId ? 1 : 0.5 }}
+                    title={serverId ? 'Server Members' : 'Members'}
                 >
                     <Users size={20} />
                 </motion.button>
@@ -345,6 +362,53 @@ export default function TopBar({ channelName = 'general', description = '', onMe
                                     desc="All posts are moderated for profanity and harmful content. Identities are pseudonymized for privacy." />
                                 <HelpItem icon={ExternalLink} title="Keyboard Shortcuts"
                                     desc="Ctrl+K — Search | Esc — Close modals" />
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
+            {/* Members Modal */}
+            <AnimatePresence>
+                {membersOpen && (
+                    <>
+                        <div onClick={() => setMembersOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9998 }} />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+                            style={{
+                                position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+                                width: '90%', maxWidth: '440px', background: '#2b2d31', borderRadius: '12px',
+                                boxShadow: '0 8px 32px rgba(0,0,0,0.5)', zIndex: 9999,
+                                maxHeight: '70vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+                            }}
+                        >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                                <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#f2f3f5', margin: 0 }}>Server Members — {members.length}</h3>
+                                <button onClick={() => setMembersOpen(false)} style={{ color: '#949ba4', background: 'none', border: 'none', cursor: 'pointer' }}>
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            <div style={{ overflowY: 'auto', padding: '8px 12px' }}>
+                                {membersLoading ? (
+                                    <div style={{ padding: '24px', textAlign: 'center', color: '#949ba4', fontSize: '13px' }}>Loading...</div>
+                                ) : members.map(m => (
+                                    <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px', borderRadius: '6px' }}>
+                                        <div style={{
+                                            width: '32px', height: '32px', borderRadius: '50%',
+                                            background: `hsl(${m.avatarHue || 0}, 60%, 45%)`,
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            fontSize: '12px', fontWeight: 700, color: '#fff',
+                                        }}>
+                                            {m.name?.slice(0, 2)?.toUpperCase()}
+                                        </div>
+                                        <span style={{ flex: 1, fontSize: '14px', fontWeight: 500, color: '#f2f3f5' }}>{m.name}</span>
+                                        <span style={{
+                                            fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '10px',
+                                            background: m.serverRole === 'owner' ? 'rgba(240,178,50,0.15)' : m.serverRole === 'admin' ? 'rgba(88,101,242,0.15)' : m.serverRole === 'moderator' ? 'rgba(35,165,89,0.15)' : 'rgba(255,255,255,0.06)',
+                                            color: m.serverRole === 'owner' ? '#f0b232' : m.serverRole === 'admin' ? '#5865f2' : m.serverRole === 'moderator' ? '#23a559' : '#949ba4',
+                                        }}>{m.serverRole}</span>
+                                    </div>
+                                ))}
                             </div>
                         </motion.div>
                     </>

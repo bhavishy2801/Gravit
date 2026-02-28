@@ -17,7 +17,7 @@ const CATEGORY_ICONS = {
 export default function ServerBar({ selectedServer, onSelectServer }) {
     const navigate = useNavigate();
     const location = useLocation();
-    const { logout } = useAuth();
+    const { logout, user } = useAuth();
     const [channels, setChannels] = useState([]);
     const [customServers, setCustomServers] = useState([]);
 
@@ -301,7 +301,8 @@ export default function ServerBar({ selectedServer, onSelectServer }) {
                 flexShrink: 0,
             }} />
 
-            {/* Dashboard */}
+            {/* Dashboard — hidden for students */}
+            {user?.role && user.role !== 'student' && (
             <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
@@ -324,6 +325,7 @@ export default function ServerBar({ selectedServer, onSelectServer }) {
             >
                 <BarChart3 size={22} />
             </motion.button>
+            )}
 
             {/* Logout */}
             <motion.button

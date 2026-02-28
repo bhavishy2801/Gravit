@@ -199,6 +199,7 @@ CREATE TABLE IF NOT EXISTS servers (
   owner_id UUID NOT NULL REFERENCES users(id),
   is_public BOOLEAN DEFAULT TRUE,
   password_hash VARCHAR(255),
+  invite_code VARCHAR(12) UNIQUE,
   member_count INTEGER DEFAULT 1,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -222,6 +223,30 @@ CREATE TABLE IF NOT EXISTS server_channels (
   is_private BOOLEAN DEFAULT FALSE,
   password_hash VARCHAR(255),
   sort_order INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ─── Server Posts (discussion threads inside server channels) ──
+CREATE TABLE IF NOT EXISTS server_posts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  server_id UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+  channel_id UUID NOT NULL REFERENCES server_channels(id) ON DELETE CASCADE,
+  author_id UUID NOT NULL REFERENCES users(id),
+  title VARCHAR(500) NOT NULL,
+  content TEXT NOT NULL,
+  reply_count INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ─── Server Post Replies (threaded replies) ─────────
+CREATE TABLE IF NOT EXISTS server_post_replies (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID NOT NULL REFERENCES server_posts(id) ON DELETE CASCADE,
+  author_id UUID NOT NULL REFERENCES users(id),
+  content TEXT NOT NULL,
+  parent_reply_id UUID REFERENCES server_post_replies(id) ON DELETE CASCADE,
+  depth INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -253,5 +278,26 @@ CREATE INDEX IF NOT EXISTS idx_channel_reads_user ON channel_reads(user_id);
 CREATE INDEX IF NOT EXISTS idx_otp_phone ON otp_codes(phone, purpose);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_server_posts_channel ON server_posts(channel_id);
+CREATE INDEX IF NOT EXISTS idx_server_posts_server ON server_posts(server_id);
+CREATE INDEX IF NOT EXISTS idx_server_post_replies_post ON server_post_replies(post_id);
 CREATE INDEX IF NOT EXISTS idx_authority_user ON authority_assignments(user_id);
 CREATE INDEX IF NOT EXISTS idx_authority_category ON authority_assignments(category, hierarchy_level);
+
+-- ═══════════════════════════════════════════════════════
+-- Migrations: safely add columns / indexes to existing tables
+-- ═══════════════════════════════════════════════════════
+DO $$
+BEGIN
+  -- Add invite_code to servers if missing
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'servers' AND column_name = 'invite_code'
+  ) THEN
+    ALTER TABLE servers ADD COLUMN invite_code VARCHAR(12) UNIQUE;
+  END IF;
+END
+$$;
+
+-- Now safe to create the index (column guaranteed to exist)
+CREATE INDEX IF NOT EXISTS idx_servers_invite_code ON servers(invite_code);

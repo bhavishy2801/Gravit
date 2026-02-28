@@ -47,6 +47,7 @@ export default function AppLayout({ channelName, channelDescription }) {
                     channelName={channelName}
                     description={channelDescription}
                     onMenuClick={() => setIsMobileMenuOpen(true)}
+                    selectedServer={selectedServer}
                 />
 
                 {/* Page content */}

@@ -1,10 +1,16 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { query, transaction } from '../config/database.js';
 import { authenticate } from '../middleware/auth.js';
 import { checkContent } from '../services/moderation.js';
 
 const router = Router();
+
+// Generate a short invite code like "Ab3Xk9"
+function generateInviteCode() {
+  return crypto.randomBytes(4).toString('base64url').slice(0, 8);
+}
 
 // ═══════════════════════════════════════════════════════
 // GET /api/servers/mine — List servers the user has joined
@@ -26,6 +32,7 @@ router.get('/mine', authenticate, async (req, res, next) => {
         icon: s.icon,
         isPublic: s.is_public,
         hasPassword: !!s.password_hash,
+        inviteCode: s.invite_code,
         memberCount: s.member_count,
         userRole: s.user_role,
         createdAt: s.created_at,
@@ -105,6 +112,7 @@ router.get('/:id', authenticate, async (req, res, next) => {
         icon: s.icon,
         isPublic: s.is_public,
         hasPassword: !!s.password_hash,
+        inviteCode: s.invite_code,
         memberCount: s.member_count,
         ownerId: s.owner_id,
         userRole: memberCheck.rows[0]?.role || null,
@@ -141,11 +149,13 @@ router.post('/', authenticate, async (req, res, next) => {
       passwordHash = await bcrypt.hash(password, 10);
     }
 
+    const inviteCode = generateInviteCode();
+
     const result = await query(`
-      INSERT INTO servers (name, description, icon, owner_id, is_public, password_hash)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO servers (name, description, icon, owner_id, is_public, password_hash, invite_code)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
-    `, [name.trim(), description.trim(), icon || name.trim().slice(0, 2).toUpperCase(), req.user.id, isPublic, passwordHash]);
+    `, [name.trim(), description.trim(), icon || name.trim().slice(0, 2).toUpperCase(), req.user.id, isPublic, passwordHash, inviteCode]);
 
     const server = result.rows[0];
 
@@ -169,6 +179,7 @@ router.post('/', authenticate, async (req, res, next) => {
         icon: server.icon,
         isPublic: server.is_public,
         hasPassword: !!server.password_hash,
+        inviteCode: server.invite_code,
         memberCount: 1,
         userRole: 'owner',
         createdAt: server.created_at,
@@ -502,6 +513,316 @@ router.delete('/:serverId/channels/:channelId', authenticate, async (req, res, n
     );
 
     res.json({ message: 'Channel deleted' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// POST /api/servers/join-by-code — Join a server using invite code + password
+// ═══════════════════════════════════════════════════════
+router.post('/join-by-code', authenticate, async (req, res, next) => {
+  try {
+    const { inviteCode, password } = req.body;
+    if (!inviteCode || !inviteCode.trim()) {
+      return res.status(400).json({ error: 'Invite code is required' });
+    }
+
+    const serverResult = await query('SELECT * FROM servers WHERE invite_code = $1', [inviteCode.trim()]);
+    if (serverResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Invalid invite code. No server found.' });
+    }
+
+    const server = serverResult.rows[0];
+
+    // Check if already a member
+    const existing = await query(
+      'SELECT 1 FROM server_members WHERE server_id = $1 AND user_id = $2',
+      [server.id, req.user.id]
+    );
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'You are already a member of this server', serverId: server.id });
+    }
+
+    // Private server: require password
+    if (!server.is_public && server.password_hash) {
+      if (!password) {
+        return res.status(401).json({ error: 'Password required for this private server' });
+      }
+      const valid = await bcrypt.compare(password, server.password_hash);
+      if (!valid) {
+        return res.status(401).json({ error: 'Incorrect server password' });
+      }
+    }
+
+    await query(
+      'INSERT INTO server_members (server_id, user_id, role) VALUES ($1, $2, $3)',
+      [server.id, req.user.id, 'member']
+    );
+    await query(
+      'UPDATE servers SET member_count = member_count + 1 WHERE id = $1',
+      [server.id]
+    );
+
+    res.json({
+      message: 'Joined server successfully',
+      serverId: server.id,
+      serverName: server.name,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// GET /api/servers/:id/channels/:channelId/posts — List posts in a server channel
+// ═══════════════════════════════════════════════════════
+router.get('/:id/channels/:channelId/posts', authenticate, async (req, res, next) => {
+  try {
+    const { id: serverId, channelId } = req.params;
+    const { sort = 'newest' } = req.query;
+
+    // Verify membership
+    const memberCheck = await query(
+      'SELECT 1 FROM server_members WHERE server_id = $1 AND user_id = $2',
+      [serverId, req.user.id]
+    );
+    if (memberCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'You are not a member of this server' });
+    }
+
+    let orderBy = 'sp.created_at DESC';
+    if (sort === 'oldest') orderBy = 'sp.created_at ASC';
+    if (sort === 'replies') orderBy = 'sp.reply_count DESC, sp.created_at DESC';
+
+    const result = await query(`
+      SELECT sp.*, u.pseudonym as author, u.display_name as author_display_name,
+             u.avatar_hue as author_avatar_hue
+      FROM server_posts sp
+      JOIN users u ON sp.author_id = u.id
+      WHERE sp.server_id = $1 AND sp.channel_id = $2
+      ORDER BY ${orderBy}
+      LIMIT 100
+    `, [serverId, channelId]);
+
+    res.json({
+      posts: result.rows.map(p => ({
+        id: p.id,
+        title: p.title,
+        content: p.content,
+        authorId: p.author_id,
+        author: p.author_display_name || p.author,
+        authorAvatarHue: p.author_avatar_hue,
+        replyCount: p.reply_count,
+        createdAt: p.created_at,
+        updatedAt: p.updated_at,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// POST /api/servers/:id/channels/:channelId/posts — Create a post in a server channel
+// ═══════════════════════════════════════════════════════
+router.post('/:id/channels/:channelId/posts', authenticate, async (req, res, next) => {
+  try {
+    const { id: serverId, channelId } = req.params;
+    const { title, content } = req.body;
+
+    if (!title?.trim() || !content?.trim()) {
+      return res.status(400).json({ error: 'Title and content are required' });
+    }
+
+    // Verify membership
+    const memberCheck = await query(
+      'SELECT 1 FROM server_members WHERE server_id = $1 AND user_id = $2',
+      [serverId, req.user.id]
+    );
+    if (memberCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'You are not a member of this server' });
+    }
+
+    // Moderation
+    const moderation = await checkContent(title + ' ' + content);
+    if (moderation.flagged) {
+      return res.status(400).json({ error: `Content blocked: ${moderation.reason}` });
+    }
+
+    const result = await query(`
+      INSERT INTO server_posts (server_id, channel_id, author_id, title, content)
+      VALUES ($1, $2, $3, $4, $5) RETURNING *
+    `, [serverId, channelId, req.user.id, title.trim(), content.trim()]);
+
+    const post = result.rows[0];
+    res.status(201).json({
+      post: {
+        id: post.id,
+        title: post.title,
+        content: post.content,
+        authorId: post.author_id,
+        replyCount: 0,
+        createdAt: post.created_at,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// GET /api/servers/:id/posts/:postId — Get a single server post with replies
+// ═══════════════════════════════════════════════════════
+router.get('/:id/posts/:postId', authenticate, async (req, res, next) => {
+  try {
+    const { id: serverId, postId } = req.params;
+
+    // Verify membership
+    const memberCheck = await query(
+      'SELECT 1 FROM server_members WHERE server_id = $1 AND user_id = $2',
+      [serverId, req.user.id]
+    );
+    if (memberCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'You are not a member of this server' });
+    }
+
+    const postResult = await query(`
+      SELECT sp.*, u.pseudonym as author, u.display_name as author_display_name,
+             u.avatar_hue as author_avatar_hue
+      FROM server_posts sp
+      JOIN users u ON sp.author_id = u.id
+      WHERE sp.id = $1 AND sp.server_id = $2
+    `, [postId, serverId]);
+
+    if (postResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    const p = postResult.rows[0];
+
+    // Get replies
+    const repliesResult = await query(`
+      SELECT r.*, u.pseudonym as author, u.display_name as author_display_name,
+             u.avatar_hue as author_avatar_hue
+      FROM server_post_replies r
+      JOIN users u ON r.author_id = u.id
+      WHERE r.post_id = $1
+      ORDER BY r.created_at ASC
+    `, [postId]);
+
+    res.json({
+      post: {
+        id: p.id,
+        title: p.title,
+        content: p.content,
+        authorId: p.author_id,
+        author: p.author_display_name || p.author,
+        authorAvatarHue: p.author_avatar_hue,
+        replyCount: p.reply_count,
+        createdAt: p.created_at,
+      },
+      replies: repliesResult.rows.map(r => ({
+        id: r.id,
+        content: r.content,
+        authorId: r.author_id,
+        author: r.author_display_name || r.author,
+        authorAvatarHue: r.author_avatar_hue,
+        parentReplyId: r.parent_reply_id,
+        depth: r.depth,
+        createdAt: r.created_at,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// POST /api/servers/:id/posts/:postId/replies — Reply to a server post
+// ═══════════════════════════════════════════════════════
+router.post('/:id/posts/:postId/replies', authenticate, async (req, res, next) => {
+  try {
+    const { id: serverId, postId } = req.params;
+    const { content, parentReplyId } = req.body;
+
+    if (!content?.trim()) {
+      return res.status(400).json({ error: 'Reply content is required' });
+    }
+
+    // Verify membership
+    const memberCheck = await query(
+      'SELECT 1 FROM server_members WHERE server_id = $1 AND user_id = $2',
+      [serverId, req.user.id]
+    );
+    if (memberCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'You are not a member of this server' });
+    }
+
+    // Moderation
+    const moderation = await checkContent(content);
+    if (moderation.flagged) {
+      return res.status(400).json({ error: `Content blocked: ${moderation.reason}` });
+    }
+
+    let depth = 0;
+    if (parentReplyId) {
+      const parentResult = await query('SELECT depth FROM server_post_replies WHERE id = $1', [parentReplyId]);
+      if (parentResult.rows.length > 0) {
+        depth = parentResult.rows[0].depth + 1;
+      }
+    }
+
+    const result = await query(`
+      INSERT INTO server_post_replies (post_id, author_id, content, parent_reply_id, depth)
+      VALUES ($1, $2, $3, $4, $5) RETURNING *
+    `, [postId, req.user.id, content.trim(), parentReplyId || null, depth]);
+
+    // Increment reply count
+    await query('UPDATE server_posts SET reply_count = reply_count + 1 WHERE id = $1', [postId]);
+
+    const r = result.rows[0];
+    res.status(201).json({
+      reply: {
+        id: r.id,
+        content: r.content,
+        authorId: r.author_id,
+        parentReplyId: r.parent_reply_id,
+        depth: r.depth,
+        createdAt: r.created_at,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// DELETE /api/servers/:id/posts/:postId — Delete a server post (author or admin)
+// ═══════════════════════════════════════════════════════
+router.delete('/:id/posts/:postId', authenticate, async (req, res, next) => {
+  try {
+    const { id: serverId, postId } = req.params;
+
+    const postResult = await query('SELECT author_id FROM server_posts WHERE id = $1 AND server_id = $2', [postId, serverId]);
+    if (postResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    const memberCheck = await query(
+      'SELECT role FROM server_members WHERE server_id = $1 AND user_id = $2',
+      [serverId, req.user.id]
+    );
+
+    const isAuthor = postResult.rows[0].author_id === req.user.id;
+    const isManager = ['owner', 'admin', 'moderator'].includes(memberCheck.rows[0]?.role);
+
+    if (!isAuthor && !isManager) {
+      return res.status(403).json({ error: 'Not authorized to delete this post' });
+    }
+
+    await query('DELETE FROM server_posts WHERE id = $1', [postId]);
+    res.json({ message: 'Post deleted' });
   } catch (err) {
     next(err);
   }
