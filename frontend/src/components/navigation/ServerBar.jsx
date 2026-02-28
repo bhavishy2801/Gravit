@@ -1,9 +1,18 @@
 ﻿import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { BarChart3, Settings, LogOut, User } from 'lucide-react';
+import { BarChart3, Settings, LogOut, User, GraduationCap, Landmark, Building2, Briefcase, Home } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
+
+// Map category names to clean Lucide icons
+const CATEGORY_ICONS = {
+    academia: GraduationCap,
+    bureaucracy: Landmark,
+    infrastructure: Building2,
+    placement: Briefcase,
+    hostel: Home,
+};
 
 export default function ServerBar() {
     const navigate = useNavigate();
@@ -115,7 +124,12 @@ export default function ServerBar() {
                             cursor: 'pointer',
                         }}
                     >
-                        {cat.icon}
+                        {(() => {
+                            const IconComp = CATEGORY_ICONS[cat.category || cat.id];
+                            return IconComp
+                                ? <IconComp size={22} color={active ? '#fff' : '#b5bac1'} />
+                                : <span style={{ fontSize: '22px' }}>{cat.icon}</span>;
+                        })()}
                         {active && (
                             <motion.div
                                 layoutId="catIndicator"

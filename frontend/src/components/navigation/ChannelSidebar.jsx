@@ -1,9 +1,17 @@
 ﻿import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Hash, Plus, Search } from 'lucide-react';
+import { ChevronDown, Hash, Plus, Search, GraduationCap, Landmark, Building2, Briefcase, Home } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
+
+const CATEGORY_ICONS = {
+    academia: GraduationCap,
+    bureaucracy: Landmark,
+    infrastructure: Building2,
+    placement: Briefcase,
+    hostel: Home,
+};
 
 export default function ChannelSidebar() {
     const navigate = useNavigate();
@@ -150,7 +158,13 @@ export default function ChannelSidebar() {
                             >
                                 <ChevronDown size={12} />
                             </motion.span>
-                            {category.icon} {category.name}
+                            {(() => {
+                                const IconComp = CATEGORY_ICONS[category.category || category.id];
+                                return IconComp
+                                    ? <IconComp size={14} style={{ marginRight: '4px', opacity: 0.7 }} />
+                                    : <span style={{ marginRight: '4px' }}>{category.icon}</span>;
+                            })()}
+                            {category.name}
 
                             <motion.span
                                 whileHover={{ scale: 1.2 }}
