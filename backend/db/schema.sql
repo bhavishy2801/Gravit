@@ -178,6 +178,53 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ─── Reports ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  reporter_id UUID NOT NULL REFERENCES users(id),
+  reason TEXT NOT NULL,
+  status VARCHAR(20) DEFAULT 'pending'
+    CHECK (status IN ('pending', 'reviewed', 'dismissed')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(post_id, reporter_id)
+);
+
+-- ─── Servers (user-created) ─────────────────────────
+CREATE TABLE IF NOT EXISTS servers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(100) NOT NULL,
+  description TEXT,
+  icon VARCHAR(10),
+  owner_id UUID NOT NULL REFERENCES users(id),
+  is_public BOOLEAN DEFAULT TRUE,
+  password_hash VARCHAR(255),
+  member_count INTEGER DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ─── Server Members ─────────────────────────────────
+CREATE TABLE IF NOT EXISTS server_members (
+  server_id UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role VARCHAR(20) NOT NULL DEFAULT 'member'
+    CHECK (role IN ('owner', 'admin', 'moderator', 'member')),
+  joined_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (server_id, user_id)
+);
+
+-- ─── Server Channels ────────────────────────────────
+CREATE TABLE IF NOT EXISTS server_channels (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  server_id UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+  name VARCHAR(100) NOT NULL,
+  description TEXT,
+  is_private BOOLEAN DEFAULT FALSE,
+  password_hash VARCHAR(255),
+  sort_order INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ─── Indexes ────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_posts_channel ON posts(channel_id);
 CREATE INDEX IF NOT EXISTS idx_posts_state ON posts(state);

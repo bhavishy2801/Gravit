@@ -107,6 +107,42 @@ body {
   background: var(--bg-floating);
 }
 
+/* Hide scrollbar (for server bar) */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Toast notification */
+.toast-notification {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  background: #313338;
+  color: #f2f3f5;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  z-index: 99999;
+  animation: toast-slide-up 0.3s ease-out, toast-fade-out 0.3s ease-in 2.7s;
+  pointer-events: none;
+}
+
+@keyframes toast-slide-up {
+  from { opacity: 0; transform: translateX(-50%) translateY(16px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+@keyframes toast-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 /* Utility classes */
 .flex {
   display: flex;

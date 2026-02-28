@@ -24,6 +24,7 @@ import channelRoutes from './routes/channels.js';
 import dashboardRoutes from './routes/dashboard.js';
 import userRoutes from './routes/users.js';
 import notificationRoutes from './routes/notifications.js';
+import serverRoutes from './routes/servers.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -69,6 +70,7 @@ app.use('/api/channels', channelRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/servers', serverRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

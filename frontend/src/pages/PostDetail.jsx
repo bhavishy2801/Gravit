@@ -1,6 +1,6 @@
 ﻿import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { ArrowLeft, ArrowBigUp, MessageSquare, Share2, Flag, Send, Loader, Trash2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft, ArrowBigUp, MessageSquare, Share2, Flag, Send, Loader, Trash2, X, Check } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import StateBadge from '../components/ui/StateBadge';
@@ -29,6 +29,10 @@ export default function PostDetail() {
     const [comments, setComments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [submittingComment, setSubmittingComment] = useState(false);
+    const [toast, setToast] = useState(null);
+    const [reportOpen, setReportOpen] = useState(false);
+    const [reportReason, setReportReason] = useState('');
+    const [reportSubmitting, setReportSubmitting] = useState(false);
 
     const canDelete = post && user && (
         user.id === post.authorId ||
@@ -55,6 +59,41 @@ export default function PostDetail() {
             setPost(prev => prev ? { ...prev, commentCount: Math.max(0, prev.commentCount - 1) } : prev);
         } catch (err) {
             console.error('Failed to delete comment:', err);
+        }
+    };
+
+    const showToast = (message) => {
+        setToast(message);
+        setTimeout(() => setToast(null), 3000);
+    };
+
+    const handleShare = async () => {
+        const url = window.location.href;
+        try {
+            if (navigator.share) {
+                await navigator.share({ title: post?.title, url });
+            } else {
+                await navigator.clipboard?.writeText(url);
+                showToast('Link copied to clipboard!');
+            }
+        } catch {
+            await navigator.clipboard?.writeText(url);
+            showToast('Link copied to clipboard!');
+        }
+    };
+
+    const handleReport = async () => {
+        if (!reportReason.trim()) return;
+        setReportSubmitting(true);
+        try {
+            await api.post(`/posts/${postId}/report`, { reason: reportReason.trim() });
+            setReportOpen(false);
+            setReportReason('');
+            showToast('Report submitted. Thank you!');
+        } catch (err) {
+            showToast(err.response?.data?.error || 'Failed to submit report');
+        } finally {
+            setReportSubmitting(false);
         }
     };
 
@@ -321,27 +360,33 @@ export default function PostDetail() {
                                     <MessageSquare size={16} /> {post.commentCount}
                                 </button>
 
-                                <button style={{
-                                    display: 'flex', alignItems: 'center', gap: '6px',
-                                    padding: '6px 14px', borderRadius: '4px',
-                                    background: 'rgba(255,255,255,0.04)',
-                                    color: '#b5bac1', fontSize: '13px',
-                                    border: 'none', cursor: 'pointer',
-                                }}
-                                    onClick={() => navigator.clipboard?.writeText(window.location.href)}
+                                <motion.button
+                                    whileTap={{ scale: 0.9 }}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: '6px',
+                                        padding: '6px 14px', borderRadius: '4px',
+                                        background: 'rgba(255,255,255,0.04)',
+                                        color: '#b5bac1', fontSize: '13px',
+                                        border: 'none', cursor: 'pointer',
+                                    }}
+                                    onClick={handleShare}
                                 >
                                     <Share2 size={16} /> Share
-                                </button>
+                                </motion.button>
 
-                                <button style={{
-                                    display: 'flex', alignItems: 'center', gap: '6px',
-                                    padding: '6px 14px', borderRadius: '4px',
-                                    background: 'rgba(255,255,255,0.04)',
-                                    color: '#b5bac1', fontSize: '13px',
-                                    border: 'none', cursor: 'pointer',
-                                }}>
+                                <motion.button
+                                    whileTap={{ scale: 0.9 }}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: '6px',
+                                        padding: '6px 14px', borderRadius: '4px',
+                                        background: 'rgba(255,255,255,0.04)',
+                                        color: '#b5bac1', fontSize: '13px',
+                                        border: 'none', cursor: 'pointer',
+                                    }}
+                                    onClick={() => setReportOpen(true)}
+                                >
                                     <Flag size={16} /> Report
-                                </button>
+                                </motion.button>
 
                                 {canDelete && (
                                     <motion.button
@@ -484,6 +529,103 @@ export default function PostDetail() {
                     </motion.button>
                 </div>
             </div>
+
+            {/* Toast notification */}
+            <AnimatePresence>
+                {toast && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 16 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 16 }}
+                        className="toast-notification"
+                    >
+                        <Check size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+                        {toast}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Report Modal */}
+            <AnimatePresence>
+                {reportOpen && (
+                    <>
+                        <div
+                            onClick={() => setReportOpen(false)}
+                            style={{
+                                position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+                                zIndex: 9998,
+                            }}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            style={{
+                                position: 'fixed', top: '50%', left: '50%',
+                                transform: 'translate(-50%, -50%)',
+                                width: '90%', maxWidth: '420px',
+                                background: '#2b2d31', borderRadius: '12px',
+                                boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                                zIndex: 9999, padding: '24px',
+                            }}
+                        >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#f2f3f5', margin: 0 }}>
+                                    <Flag size={18} style={{ marginRight: '8px', verticalAlign: 'middle', color: '#da373c' }} />
+                                    Report Post
+                                </h3>
+                                <button
+                                    onClick={() => setReportOpen(false)}
+                                    style={{ color: '#949ba4', background: 'none', border: 'none', cursor: 'pointer' }}
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            <p style={{ fontSize: '13px', color: '#949ba4', marginBottom: '12px' }}>
+                                Tell us why this post should be reviewed. Reports are anonymous.
+                            </p>
+                            <textarea
+                                value={reportReason}
+                                onChange={(e) => setReportReason(e.target.value)}
+                                placeholder="Describe the issue..."
+                                rows={4}
+                                style={{
+                                    width: '100%', background: '#1e1f22', border: '1px solid #3f4147',
+                                    borderRadius: '8px', color: '#f2f3f5', fontSize: '14px',
+                                    padding: '10px 12px', resize: 'vertical', outline: 'none',
+                                    fontFamily: 'inherit',
+                                }}
+                            />
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
+                                <button
+                                    onClick={() => setReportOpen(false)}
+                                    style={{
+                                        padding: '8px 16px', borderRadius: '6px',
+                                        background: 'transparent', color: '#b5bac1',
+                                        fontSize: '14px', border: 'none', cursor: 'pointer',
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <motion.button
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={handleReport}
+                                    disabled={reportSubmitting || !reportReason.trim()}
+                                    style={{
+                                        padding: '8px 20px', borderRadius: '6px',
+                                        background: '#da373c', color: '#fff',
+                                        fontSize: '14px', fontWeight: 600,
+                                        border: 'none', cursor: reportReason.trim() ? 'pointer' : 'default',
+                                        opacity: reportReason.trim() ? 1 : 0.5,
+                                    }}
+                                >
+                                    {reportSubmitting ? 'Submitting...' : 'Submit Report'}
+                                </motion.button>
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { BarChart3, Settings, LogOut, User, GraduationCap, Landmark, Building2, Briefcase, Home } from 'lucide-react';
+import { BarChart3, LogOut, User, GraduationCap, Landmark, Building2, Briefcase, Home, Plus, Compass } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 
@@ -14,25 +14,41 @@ const CATEGORY_ICONS = {
     hostel: Home,
 };
 
-export default function ServerBar() {
+export default function ServerBar({ selectedServer, onSelectServer }) {
     const navigate = useNavigate();
     const location = useLocation();
     const { logout } = useAuth();
     const [channels, setChannels] = useState([]);
+    const [customServers, setCustomServers] = useState([]);
 
     useEffect(() => {
-        async function fetchChannels() {
+        async function fetchData() {
             try {
-                const res = await api.get('/channels');
-                setChannels(res.data.channels);
+                const [chRes, srvRes] = await Promise.all([
+                    api.get('/channels'),
+                    api.get('/servers/mine').catch(() => ({ data: { servers: [] } })),
+                ]);
+                setChannels(chRes.data.channels);
+                setCustomServers(srvRes.data.servers || []);
             } catch (err) {
-                console.error('Failed to load channels for server bar:', err);
+                console.error('Failed to load server bar data:', err);
             }
         }
-        fetchChannels();
+        fetchData();
     }, []);
 
     const isActive = (path) => location.pathname.startsWith(path);
+
+    const handleServerClick = (cat) => {
+        const firstSub = cat.subChannels?.[0]?.id;
+        onSelectServer?.(cat.id);
+        if (firstSub) navigate(`/channels/${firstSub}`);
+    };
+
+    const handleCustomServerClick = (server) => {
+        onSelectServer?.(`server-${server.id}`);
+        navigate(`/servers/${server.id}`);
+    };
 
     return (
         <div style={{
@@ -45,19 +61,21 @@ export default function ServerBar() {
             alignItems: 'center',
             paddingTop: '12px',
             gap: '8px',
-            overflowY: 'auto',
-            overflowX: 'hidden',
+            overflow: 'hidden',
         }}>
             {/* Gravit Logo */}
             <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => navigate('/channels/curriculum')}
+                onClick={() => {
+                    onSelectServer?.(null);
+                    navigate('/channels/curriculum');
+                }}
                 style={{
                     width: '48px',
                     height: '48px',
-                    borderRadius: isActive('/channels') ? '16px' : '24px',
-                    background: isActive('/channels')
+                    borderRadius: !selectedServer && isActive('/channels') ? '16px' : '24px',
+                    background: !selectedServer && isActive('/channels')
                         ? 'linear-gradient(135deg, #5865f2, #7289da)'
                         : '#1a1b1e',
                     display: 'flex',
@@ -70,10 +88,11 @@ export default function ServerBar() {
                     position: 'relative',
                     border: 'none',
                     cursor: 'pointer',
+                    flexShrink: 0,
                 }}
             >
                 G
-                {isActive('/channels') && (
+                {!selectedServer && isActive('/channels') && (
                     <motion.div
                         layoutId="serverIndicator"
                         style={{
@@ -95,58 +114,182 @@ export default function ServerBar() {
                 background: '#252729',
                 borderRadius: '1px',
                 margin: '4px 0',
+                flexShrink: 0,
             }} />
 
-            {/* Channel category icons */}
-            {channels.map((cat) => {
-                const firstSub = cat.subChannels[0]?.id;
-                const active = location.pathname.includes(cat.id) ||
-                    cat.subChannels.some(s => location.pathname.includes(s.id));
+            {/* Scrollable server list */}
+            <div className="hide-scrollbar" style={{
+                flex: 1,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '8px',
+                width: '100%',
+                paddingBottom: '8px',
+            }}>
+                {/* Category servers */}
+                {channels.map((cat) => {
+                    const active = selectedServer === cat.id ||
+                        (!selectedServer && (location.pathname.includes(cat.id) ||
+                            cat.subChannels.some(s => location.pathname.includes(s.id))));
 
-                return (
-                    <motion.button
-                        key={cat.id}
-                        whileHover={{ scale: 1.1, borderRadius: '16px' }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => navigate(`/channels/${firstSub}`)}
-                        title={cat.name}
-                        style={{
-                            width: '48px',
-                            height: '48px',
-                            borderRadius: active ? '16px' : '24px',
-                            background: active ? '#5865f2' : '#1a1b1e',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '22px',
-                            transition: 'border-radius 0.2s, background 0.2s',
-                            position: 'relative',
-                            border: 'none',
-                            cursor: 'pointer',
-                        }}
-                    >
-                        {(() => {
-                            const IconComp = CATEGORY_ICONS[cat.category || cat.id];
-                            return IconComp
-                                ? <IconComp size={22} color={active ? '#fff' : '#b5bac1'} />
-                                : <span style={{ fontSize: '22px' }}>{cat.icon}</span>;
-                        })()}
-                        {active && (
-                            <motion.div
-                                layoutId="catIndicator"
-                                style={{
-                                    position: 'absolute',
-                                    left: '-16px',
-                                    width: '4px',
-                                    height: '20px',
-                                    background: '#f2f3f5',
-                                    borderRadius: '0 4px 4px 0',
-                                }}
-                            />
-                        )}
-                    </motion.button>
-                );
-            })}
+                    return (
+                        <motion.button
+                            key={cat.id}
+                            whileHover={{ scale: 1.1, borderRadius: '16px' }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => handleServerClick(cat)}
+                            title={cat.name}
+                            style={{
+                                width: '48px',
+                                height: '48px',
+                                minHeight: '48px',
+                                borderRadius: active ? '16px' : '24px',
+                                background: active ? '#5865f2' : '#1a1b1e',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '22px',
+                                transition: 'border-radius 0.2s, background 0.2s',
+                                position: 'relative',
+                                border: 'none',
+                                cursor: 'pointer',
+                                flexShrink: 0,
+                            }}
+                        >
+                            {(() => {
+                                const IconComp = CATEGORY_ICONS[cat.category || cat.id];
+                                return IconComp
+                                    ? <IconComp size={22} color={active ? '#fff' : '#b5bac1'} />
+                                    : <span style={{ fontSize: '22px' }}>{cat.icon}</span>;
+                            })()}
+                            {active && (
+                                <motion.div
+                                    layoutId="catIndicator"
+                                    style={{
+                                        position: 'absolute',
+                                        left: '-16px',
+                                        width: '4px',
+                                        height: '20px',
+                                        background: '#f2f3f5',
+                                        borderRadius: '0 4px 4px 0',
+                                    }}
+                                />
+                            )}
+                        </motion.button>
+                    );
+                })}
+
+                {/* Separator before custom servers */}
+                {customServers.length > 0 && (
+                    <div style={{
+                        width: '32px',
+                        height: '2px',
+                        background: '#252729',
+                        borderRadius: '1px',
+                        margin: '4px 0',
+                        flexShrink: 0,
+                    }} />
+                )}
+
+                {/* Custom / user-created servers */}
+                {customServers.map((server) => {
+                    const active = selectedServer === `server-${server.id}`;
+                    return (
+                        <motion.button
+                            key={server.id}
+                            whileHover={{ scale: 1.1, borderRadius: '16px' }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => handleCustomServerClick(server)}
+                            title={server.name}
+                            style={{
+                                width: '48px',
+                                height: '48px',
+                                minHeight: '48px',
+                                borderRadius: active ? '16px' : '24px',
+                                background: active ? '#5865f2' : '#1a1b1e',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '16px',
+                                fontWeight: 700,
+                                color: active ? '#fff' : '#b5bac1',
+                                transition: 'border-radius 0.2s, background 0.2s',
+                                position: 'relative',
+                                border: 'none',
+                                cursor: 'pointer',
+                                flexShrink: 0,
+                            }}
+                        >
+                            {server.icon || server.name?.slice(0, 2)?.toUpperCase()}
+                            {active && (
+                                <motion.div
+                                    style={{
+                                        position: 'absolute',
+                                        left: '-16px',
+                                        width: '4px',
+                                        height: '20px',
+                                        background: '#f2f3f5',
+                                        borderRadius: '0 4px 4px 0',
+                                    }}
+                                />
+                            )}
+                        </motion.button>
+                    );
+                })}
+
+                {/* Create Server */}
+                <motion.button
+                    whileHover={{ scale: 1.1, borderRadius: '16px' }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => navigate('/create-server')}
+                    title="Create a Server"
+                    style={{
+                        width: '48px',
+                        height: '48px',
+                        minHeight: '48px',
+                        borderRadius: '24px',
+                        background: '#1a1b1e',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#23a559',
+                        transition: 'border-radius 0.2s, background 0.2s, color 0.2s',
+                        border: 'none',
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                    }}
+                >
+                    <Plus size={22} />
+                </motion.button>
+
+                {/* Explore servers */}
+                <motion.button
+                    whileHover={{ scale: 1.1, borderRadius: '16px' }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => navigate('/explore')}
+                    title="Explore Servers"
+                    style={{
+                        width: '48px',
+                        height: '48px',
+                        minHeight: '48px',
+                        borderRadius: '24px',
+                        background: '#1a1b1e',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#23a559',
+                        transition: 'border-radius 0.2s, background 0.2s',
+                        border: 'none',
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                    }}
+                >
+                    <Compass size={22} />
+                </motion.button>
+            </div>
 
             {/* Separator */}
             <div style={{
@@ -155,6 +298,7 @@ export default function ServerBar() {
                 background: '#252729',
                 borderRadius: '1px',
                 margin: '4px 0',
+                flexShrink: 0,
             }} />
 
             {/* Dashboard */}
@@ -175,59 +319,10 @@ export default function ServerBar() {
                     transition: 'border-radius 0.2s, background 0.2s',
                     border: 'none',
                     cursor: 'pointer',
+                    flexShrink: 0,
                 }}
             >
                 <BarChart3 size={22} />
-            </motion.button>
-
-            {/* Spacer */}
-            <div style={{ flex: 1 }} />
-
-            {/* Profile */}
-            <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => navigate('/profile')}
-                title="Profile Settings"
-                style={{
-                    width: '48px',
-                    height: '48px',
-                    borderRadius: isActive('/profile') ? '16px' : '24px',
-                    background: isActive('/profile') ? '#5865f2' : '#1a1b1e',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: isActive('/profile') ? '#fff' : '#b5bac1',
-                    transition: 'border-radius 0.2s, background 0.2s',
-                    marginBottom: '4px',
-                    border: 'none',
-                    cursor: 'pointer',
-                }}
-            >
-                <User size={20} />
-            </motion.button>
-
-            {/* Settings */}
-            <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => navigate('/profile')}
-                title="Settings"
-                style={{
-                    width: '48px',
-                    height: '48px',
-                    borderRadius: isActive('/profile') && !isActive('/profile/') ? '16px' : '24px',
-                    background: '#1a1b1e',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#b5bac1',
-                    marginBottom: '4px',
-                    border: 'none',
-                    cursor: 'pointer',
-                }}
-            >
-                <Settings size={20} />
             </motion.button>
 
             {/* Logout */}
@@ -248,6 +343,7 @@ export default function ServerBar() {
                     marginBottom: '12px',
                     border: 'none',
                     cursor: 'pointer',
+                    flexShrink: 0,
                 }}
             >
                 <LogOut size={20} />

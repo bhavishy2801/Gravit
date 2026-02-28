@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Hash, Plus, Search, GraduationCap, Landmark, Building2, Briefcase, Home } from 'lucide-react';
+import { ChevronDown, Hash, Plus, Search, Lock, GraduationCap, Landmark, Building2, Briefcase, Home } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 
@@ -13,15 +13,88 @@ const CATEGORY_ICONS = {
     hostel: Home,
 };
 
-export default function ChannelSidebar() {
+export default function ChannelSidebar({ selectedServer }) {
     const navigate = useNavigate();
     const location = useLocation();
     const { user } = useAuth();
 
     const [channels, setChannels] = useState([]);
+    const [serverChannels, setServerChannels] = useState([]);
+    const [serverInfo, setServerInfo] = useState(null);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [expanded, setExpanded] = useState({});
+
+    // Fetch institution channels
+    useEffect(() => {
+        async function fetchChannels() {
+            try {
+                const res = await api.get('/channels');
+                const data = res.data.channels;
+                setChannels(data);
+                const expandState = {};
+                data.forEach(cat => { expandState[cat.id] = true; });
+                setExpanded(prev => ({ ...prev, ...expandState }));
+            } catch (err) {
+                console.error('Failed to load channels:', err);
+            } finally {
+                setLoading(false);
+            }
+        }
+        fetchChannels();
+    }, []);
+
+    // Fetch server channels when a custom server is selected
+    useEffect(() => {
+        if (!selectedServer?.startsWith('server-')) {
+            setServerChannels([]);
+            setServerInfo(null);
+            return;
+        }
+        const serverId = selectedServer.replace('server-', '');
+        async function fetchServerData() {
+            try {
+                const [srvRes, chRes] = await Promise.all([
+                    api.get(`/servers/${serverId}`),
+                    api.get(`/servers/${serverId}/channels`),
+                ]);
+                setServerInfo(srvRes.data.server);
+                setServerChannels(chRes.data.channels || []);
+            } catch (err) {
+                console.error('Failed to load server channels:', err);
+            }
+        }
+        fetchServerData();
+    }, [selectedServer]);
+
+    const toggleCategory = (catId) => {
+        setExpanded(prev => ({ ...prev, [catId]: !prev[catId] }));
+    };
+
+    const isActiveChannel = (channelId) => location.pathname.includes(channelId);
+
+    // If a custom server is selected, show its channels
+    const isCustomServer = selectedServer?.startsWith('server-');
+
+    // Filter categories based on selectedServer
+    const displayCategories = isCustomServer ? [] : (() => {
+        const filtered = selectedServer
+            ? channels.filter(cat => cat.id === selectedServer)
+            : channels;
+
+        return filtered.map(cat => ({
+            ...cat,
+            subChannels: cat.subChannels.filter(sub =>
+                sub.name.toLowerCase().includes(searchQuery.toLowerCase())
+            ),
+        })).filter(cat => cat.subChannels.length > 0);
+    })();
+
+    const serverTitle = isCustomServer
+        ? (serverInfo?.name || 'Server')
+        : selectedServer
+            ? channels.find(c => c.id === selectedServer)?.name || 'IIT Jodhpur'
+            : 'IIT Jodhpur';
 
     useEffect(() => {
         async function fetchChannels() {
@@ -41,19 +114,6 @@ export default function ChannelSidebar() {
         fetchChannels();
     }, []);
 
-    const toggleCategory = (catId) => {
-        setExpanded(prev => ({ ...prev, [catId]: !prev[catId] }));
-    };
-
-    const isActiveChannel = (channelId) => location.pathname.includes(channelId);
-
-    const filteredChannels = channels.map(cat => ({
-        ...cat,
-        subChannels: cat.subChannels.filter(sub =>
-            sub.name.toLowerCase().includes(searchQuery.toLowerCase())
-        ),
-    })).filter(cat => cat.subChannels.length > 0);
-
     return (
         <div style={{
             width: '240px',
@@ -64,7 +124,7 @@ export default function ChannelSidebar() {
             flexDirection: 'column',
             overflow: 'hidden',
         }}>
-            {/* Institution header */}
+            {/* Institution / Server header */}
             <div style={{
                 padding: '12px 16px',
                 borderBottom: '2px solid #0d0e10',
@@ -82,7 +142,7 @@ export default function ChannelSidebar() {
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
                 }}>
-                    IIT Jodhpur
+                    {serverTitle}
                 </span>
                 <ChevronDown size={16} color="#b5bac1" />
             </div>
@@ -128,7 +188,42 @@ export default function ChannelSidebar() {
                     </div>
                 )}
 
-                {filteredChannels.map((category) => (
+                {/* Custom server channels */}
+                {isCustomServer && serverChannels.map((channel) => {
+                    const active = isActiveChannel(channel.id);
+                    return (
+                        <motion.button
+                            key={channel.id}
+                            onClick={() => navigate(`/servers/${selectedServer.replace('server-', '')}/channels/${channel.id}`)}
+                            whileHover={{ backgroundColor: '#35373c' }}
+                            style={{
+                                width: '100%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '6px 8px 6px 16px',
+                                borderRadius: '4px',
+                                margin: '1px 8px',
+                                maxWidth: 'calc(100% - 16px)',
+                                fontSize: '14px',
+                                fontWeight: active ? 600 : 400,
+                                color: active ? '#f2f3f5' : '#949ba4',
+                                background: active ? '#2e3035' : 'transparent',
+                                transition: 'color 0.15s',
+                                cursor: 'pointer',
+                                border: 'none',
+                            }}
+                        >
+                            {channel.is_private ? <Lock size={16} style={{ opacity: 0.7 }} /> : <Hash size={16} style={{ opacity: 0.7 }} />}
+                            <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {channel.name}
+                            </span>
+                        </motion.button>
+                    );
+                })}
+
+                {/* Institution category channels */}
+                {!isCustomServer && displayCategories.map((category) => (
                     <div key={category.id} style={{ marginBottom: '4px' }}>
                         <button
                             onClick={() => toggleCategory(category.id)}
@@ -246,15 +341,23 @@ export default function ChannelSidebar() {
                 ))}
             </div>
 
-            {/* User panel at bottom */}
-            <div style={{
-                padding: '8px',
-                background: '#0d0e10',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                borderTop: '1px solid #080809',
-            }}>
+            {/* User panel at bottom — click to go to profile */}
+            <div
+                onClick={() => navigate('/profile')}
+                style={{
+                    padding: '8px',
+                    background: '#0d0e10',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    borderTop: '1px solid #080809',
+                    cursor: 'pointer',
+                    transition: 'background 0.15s',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#1a1b1e'}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#0d0e10'}
+                title="Profile Settings"
+            >
                 <div style={{
                     width: '32px',
                     height: '32px',

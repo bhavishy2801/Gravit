@@ -6,6 +6,7 @@ import TopBar from '../components/navigation/TopBar';
 
 export default function AppLayout({ channelName, channelDescription }) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [selectedServer, setSelectedServer] = useState(null);
 
     return (
         <div style={{
@@ -26,10 +27,10 @@ export default function AppLayout({ channelName, channelDescription }) {
                 style={{ display: 'flex', height: '100%', zIndex: 50 }}
             >
                 {/* Server bar (leftmost) */}
-                <ServerBar />
+                <ServerBar selectedServer={selectedServer} onSelectServer={setSelectedServer} />
 
                 {/* Channel sidebar */}
-                <ChannelSidebar />
+                <ChannelSidebar selectedServer={selectedServer} />
             </div>
 
             {/* Main content area */}

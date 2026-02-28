@@ -9,6 +9,42 @@ import { checkContent } from '../services/moderation.js';
 const router = Router();
 
 // ═══════════════════════════════════════════════════════
+// GET /api/posts/search — Search posts by title/content
+// ═══════════════════════════════════════════════════════
+router.get('/search', optionalAuth, async (req, res, next) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.trim().length < 2) {
+      return res.json({ posts: [] });
+    }
+
+    const searchTerm = `%${q.trim()}%`;
+    const result = await query(`
+      SELECT p.id, p.title, p.channel_id, p.state, p.created_at,
+        u.pseudonym as author, u.display_name as author_display_name
+      FROM posts p
+      JOIN users u ON p.author_id = u.id
+      WHERE p.title ILIKE $1 OR p.content ILIKE $1
+      ORDER BY p.created_at DESC
+      LIMIT 20
+    `, [searchTerm]);
+
+    const posts = result.rows.map(p => ({
+      id: p.id,
+      title: p.title,
+      channelId: p.channel_id,
+      state: p.state,
+      author: p.author_display_name || p.author,
+      createdAt: p.created_at,
+    }));
+
+    res.json({ posts });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
 // GET /api/posts — List posts (with optional filters)
 // ═══════════════════════════════════════════════════════
 router.get('/', optionalAuth, async (req, res, next) => {
@@ -529,6 +565,44 @@ router.delete('/:id', authenticate, async (req, res, next) => {
     io.to(`channel:${post.channel_id}`).emit('post:deleted', { postId });
 
     res.json({ message: 'Post deleted successfully' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// POST /api/posts/:id/report — Report a post
+// ═══════════════════════════════════════════════════════
+router.post('/:id/report', authenticate, async (req, res, next) => {
+  try {
+    const { reason } = req.body;
+    if (!reason || reason.trim().length < 5) {
+      return res.status(400).json({ error: 'Please provide a reason (at least 5 characters)' });
+    }
+
+    const postId = req.params.id;
+
+    // Verify post exists
+    const postCheck = await query('SELECT id FROM posts WHERE id = $1', [postId]);
+    if (postCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    // Prevent duplicate reports
+    const existing = await query(
+      'SELECT 1 FROM reports WHERE post_id = $1 AND reporter_id = $2',
+      [postId, req.user.id]
+    );
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'You have already reported this post' });
+    }
+
+    await query(
+      'INSERT INTO reports (post_id, reporter_id, reason) VALUES ($1, $2, $3)',
+      [postId, req.user.id, reason.trim()]
+    );
+
+    res.json({ message: 'Report submitted successfully' });
   } catch (err) {
     next(err);
   }

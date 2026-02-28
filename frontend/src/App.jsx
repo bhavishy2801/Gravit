@@ -10,6 +10,9 @@ import PostDetail from './pages/PostDetail';
 import Dashboard from './pages/Dashboard';
 import ProfilePage from './pages/ProfilePage';
 import NotificationsPage from './pages/NotificationsPage';
+import CreateServerPage from './pages/CreateServerPage';
+import ExplorePage from './pages/ExplorePage';
+import ServerView from './pages/ServerView';
 
 function App() {
   return (
@@ -28,6 +31,10 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
+              <Route path="/create-server" element={<CreateServerPage />} />
+              <Route path="/explore" element={<ExplorePage />} />
+              <Route path="/servers/:serverId" element={<ServerView />} />
+              <Route path="/servers/:serverId/channels/:channelId" element={<ServerView />} />
             </Route>
 
             {/* Default redirect */}
