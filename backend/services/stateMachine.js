@@ -49,6 +49,9 @@ export async function transitionState(postId, newState, metadata = {}) {
     // Set response deadline based on hierarchy
     if (metadata.responseWindowHours) {
       sql += `, response_deadline = NOW() + INTERVAL '${parseInt(metadata.responseWindowHours)} hours'`;
+    } else if (metadata.responseWindowHours === null) {
+      // Explicitly null = final tier, no further escalation — clear any existing deadline
+      sql += `, response_deadline = NULL`;
     } else {
       sql += `, response_deadline = NOW() + INTERVAL '72 hours'`;
     }

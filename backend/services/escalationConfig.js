@@ -13,30 +13,30 @@
 export const STATIC_ESCALATION = {
   // ─── Mess ──────────────────────────────────────────
   mess: [
-    { level: 1, role: 'Dining Services',           email: 'catering@iitj.ac.in',         hours: 72  },   // ~3 days
-    { level: 2, role: 'Board of Hostel Affairs',    email: 'bha@iitj.ac.in',              hours: 72  },   // +3 days
-    { level: 3, role: 'Associate Dean Hostel Affairs', email: 'adha@iitj.ac.in',          hours: 0   },   // final
+    { level: 1, role: 'Dining Services',           email: 'n3neural@gmail.com',         hours: 72  },   // ~3 days
+    { level: 2, role: 'Board of Hostel Affairs',    email: 'n3neural@gmail.com',              hours: 72  },   // +3 days
+    { level: 3, role: 'Associate Dean Hostel Affairs', email: 'n3neural@gmail.com',          hours: 0   },   // final
   ],
 
   // ─── Academia ──────────────────────────────────────
   academia: [
-    { level: 1, role: 'Office of Students',         email: 'office_students@iitj.ac.in',  hours: 72  },
-    { level: 2, role: 'Dean of Academic Affairs',    email: 'doaa@iitj.ac.in',             hours: 0   },   // final
+    { level: 1, role: 'Office of Students',         email: 'n3neural@gmail.com',  hours: 72  },
+    { level: 2, role: 'Dean of Academic Affairs',    email: 'n3neural@gmail.com',             hours: 0   },   // final
   ],
 
   // ─── Bureaucracy ───────────────────────────────────
   bureaucracy: [
-    { level: 1, role: 'ERP',                        email: 'erp@iitj.ac.in',              hours: 0   },   // single tier
+    { level: 1, role: 'ERP',                        email: 'n3neural@gmail.com',              hours: 0   },   // single tier
   ],
 
   // ─── Infrastructure ───────────────────────────────
   infrastructure: [
-    { level: 1, role: 'OIE',                        email: 'oie@iitj.ac.in',              hours: 0   },   // single tier
+    { level: 1, role: 'OIE',                        email: 'n3neural@gmail.com',              hours: 0   },   // single tier
   ],
 
   // ─── Placement ────────────────────────────────────
   placement: [
-    { level: 1, role: 'Placement Office',            email: 'placement@iitj.ac.in',        hours: 0   },   // single tier
+    { level: 1, role: 'Placement Office',            email: 'n3neural@gmail.com',        hours: 0   },   // single tier
   ],
 };
 
@@ -52,19 +52,20 @@ function hostelEscalation(hostelCode) {
     {
       level: 1,
       role: `${code.toUpperCase()} Caretaker`,
-      email: `${code}caretaker@iitj.ac.in`,
+      email: `n3neural@gmail.com`,
       hours: 96,       // ~4 days
     },
     {
       level: 2,
       role: `Warden ${code.toUpperCase()} Hostel`,
-      email: `warden_${code}_hostel@iitj.ac.in`,
+    //   email: `warden_${code}_hostel@iitj.ac.in`,
+      email: `n3neural@gmail.com`,
       hours: 120,      // ~5 days
     },
     {
       level: 3,
       role: 'Associate Dean Hostel Affairs',
-      email: 'adha@iitj.ac.in',
+      email: 'n3neural@gmail.com',
       hours: 0,        // final tier
     },
   ];

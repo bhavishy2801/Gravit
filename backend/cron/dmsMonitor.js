@@ -46,7 +46,7 @@ export function createDMSMonitor(pool, io) {
           // Transition state
           await transitionState(post.id, 'escalated', {
             escalationLevel: newLevel,
-            responseWindowHours: nextAuthority.hours || 72,
+            responseWindowHours: nextAuthority.hours || null,   // null = final tier, no further deadline
           });
 
           // Log escalation

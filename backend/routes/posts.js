@@ -393,11 +393,11 @@ router.post('/:id/upvote', authenticate, async (req, res, next) => {
 
       // Get authority info from escalation config
       const authority = getAuthorityAtLevel(category, 1);
-      const hours = authority?.hours || 72;
+      const hours = authority?.hours || 0;
 
       const updated = await transitionState(postId, 'escalated', {
         escalationLevel: 1,
-        responseWindowHours: hours || 72,   // if hours=0 (final), still give a window for the DB
+        responseWindowHours: hours || null,   // null = no deadline for final-tier authorities
       });
       newState = updated.state;
 
