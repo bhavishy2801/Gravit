@@ -67,7 +67,12 @@ export default function ServerView() {
     const chatEndRef = useRef(null);
     const chatContainerRef = useRef(null);
 
-    const { joinServerChannel, leaveServerChannel, on, off } = useSocket();
+    const { joinServerChannel, leaveServerChannel, joinServer, leaveServer, joinServerPost, leaveServerPost, emitTypingStart, emitTypingStop, on, off } = useSocket();
+
+    // Typing indicator state
+    const [typingUsers, setTypingUsers] = useState({}); // { [userId]: pseudonym }
+    const typingTimerRef = useRef(null);
+    const isTypingRef = useRef(false);
 
     const fetchServer = useCallback(async () => {
         try {
@@ -88,6 +93,37 @@ export default function ServerView() {
     }, [serverId]);
 
     useEffect(() => { fetchServer(); }, [fetchServer]);
+
+    // Join server room for real-time channel/member updates
+    useEffect(() => {
+        if (!serverId) return;
+        joinServer(serverId);
+
+        const handleChannelCreated = ({ channel }) => {
+            setChannels(prev => [...prev, channel]);
+        };
+        const handleChannelDeleted = ({ channelId }) => {
+            setChannels(prev => prev.filter(c => c.id !== parseInt(channelId) && c.id !== channelId));
+        };
+        const handleMemberJoined = () => fetchServer();
+        const handleMemberLeft = () => fetchServer();
+        const handleMemberRoleChanged = () => fetchServer();
+
+        on('server:channel-created', handleChannelCreated);
+        on('server:channel-deleted', handleChannelDeleted);
+        on('server:member-joined', handleMemberJoined);
+        on('server:member-left', handleMemberLeft);
+        on('server:member-role-changed', handleMemberRoleChanged);
+
+        return () => {
+            leaveServer(serverId);
+            off('server:channel-created', handleChannelCreated);
+            off('server:channel-deleted', handleChannelDeleted);
+            off('server:member-joined', handleMemberJoined);
+            off('server:member-left', handleMemberLeft);
+            off('server:member-role-changed', handleMemberRoleChanged);
+        };
+    }, [serverId, joinServer, leaveServer, on, off, fetchServer]);
 
     const fetchPosts = useCallback(async () => {
         if (!activeChannelId) return;
@@ -133,7 +169,7 @@ export default function ServerView() {
         }
     }, [chatMessages, viewMode]);
 
-    // Chat: socket.io join/leave channel room & listen for messages
+    // Chat: socket.io join/leave channel room & listen for messages + typing
     useEffect(() => {
         if (!activeChannelId) return;
         joinServerChannel(activeChannelId);
@@ -143,15 +179,61 @@ export default function ServerView() {
         };
         on('chat:message', handleNewMessage);
 
+        // Typing indicators
+        const handleTypingStart = ({ channelId, userId, pseudonym }) => {
+            if (channelId !== activeChannelId) return;
+            setTypingUsers(prev => ({ ...prev, [userId]: pseudonym }));
+            // Auto-clear after 4s in case stop event is lost
+            setTimeout(() => {
+                setTypingUsers(prev => {
+                    const next = { ...prev };
+                    delete next[userId];
+                    return next;
+                });
+            }, 4000);
+        };
+        const handleTypingStop = ({ channelId, userId }) => {
+            if (channelId !== activeChannelId) return;
+            setTypingUsers(prev => {
+                const next = { ...prev };
+                delete next[userId];
+                return next;
+            });
+        };
+        on('typing:start', handleTypingStart);
+        on('typing:stop', handleTypingStop);
+
+        // Thread post events (broadcast on same channel room)
+        const handleServerPostCreated = ({ post: newPost }) => {
+            setPosts(prev => [newPost, ...prev]);
+        };
+        const handleServerPostDeleted = ({ postId }) => {
+            setPosts(prev => prev.filter(p => p.id !== postId && p.id !== parseInt(postId)));
+            setActivePost(prev => prev?.id === postId || prev?.id === parseInt(postId) ? null : prev);
+        };
+        on('server:post-created', handleServerPostCreated);
+        on('server:post-deleted', handleServerPostDeleted);
+
         return () => {
             leaveServerChannel(activeChannelId);
             off('chat:message', handleNewMessage);
+            off('typing:start', handleTypingStart);
+            off('typing:stop', handleTypingStop);
+            off('server:post-created', handleServerPostCreated);
+            off('server:post-deleted', handleServerPostDeleted);
+            setTypingUsers({});
         };
     }, [activeChannelId, joinServerChannel, leaveServerChannel, on, off]);
 
     const handleSendChat = async () => {
         if (!chatInput.trim() || chatSending) return;
         setChatSending(true);
+        // Stop typing indicator
+        if (isTypingRef.current) {
+            emitTypingStop(activeChannelId);
+            isTypingRef.current = false;
+            clearTimeout(typingTimerRef.current);
+        }
         try {
             await api.post(`/servers/${serverId}/channels/${activeChannelId}/messages`, {
                 content: chatInput.trim(),
@@ -163,6 +245,21 @@ export default function ServerView() {
         } finally {
             setChatSending(false);
         }
+    };
+
+    const handleChatInputChange = (e) => {
+        setChatInput(e.target.value);
+        if (!activeChannelId) return;
+        // Debounced typing emit
+        if (!isTypingRef.current) {
+            isTypingRef.current = true;
+            emitTypingStart(activeChannelId);
+        }
+        clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = setTimeout(() => {
+            isTypingRef.current = false;
+            emitTypingStop(activeChannelId);
+        }, 2000);
     };
 
     const fetchMembers = async () => {
@@ -187,6 +284,27 @@ export default function ServerView() {
             setThreadLoading(false);
         }
     };
+
+    // Real-time: listen for new replies on the active thread
+    useEffect(() => {
+        if (!activePost?.id) return;
+        joinServerPost(activePost.id);
+
+        const handleReplyCreated = ({ reply }) => {
+            setReplies(prev => [...prev, reply]);
+            // Update reply count on the post in the list
+            setPosts(prev => prev.map(p =>
+                p.id === activePost.id ? { ...p, replyCount: (p.replyCount || 0) + 1 } : p
+            ));
+        };
+
+        on('server:reply-created', handleReplyCreated);
+
+        return () => {
+            leaveServerPost(activePost.id);
+            off('server:reply-created', handleReplyCreated);
+        };
+    }, [activePost?.id, joinServerPost, leaveServerPost, on, off]);
 
     const handleCreatePost = async () => {
         if (!postTitle.trim() || !postContent.trim()) return;
@@ -566,11 +684,48 @@ export default function ServerView() {
                             )}
                             {chatMessages.map((msg, idx) => {
                                 const prevMsg = chatMessages[idx - 1];
-                                const sameAuthor = prevMsg && prevMsg.authorId === msg.authorId;
-                                const withinMinute = prevMsg && (new Date(msg.createdAt) - new Date(prevMsg.createdAt)) < 60000;
+                                const msgDate = new Date(msg.createdAt);
+                                const prevDate = prevMsg ? new Date(prevMsg.createdAt) : null;
+                                const showDateSep = !prevDate ||
+                                    msgDate.toDateString() !== prevDate.toDateString();
+                                const sameAuthor = prevMsg && prevMsg.authorId === msg.authorId && !showDateSep;
+                                const withinMinute = prevMsg && (msgDate - prevDate) < 60000;
                                 const grouped = sameAuthor && withinMinute;
+
+                                // Date label: "Today", "Yesterday", or "Feb 27, 2025"
+                                let dateLabel = '';
+                                if (showDateSep) {
+                                    const today = new Date();
+                                    const yesterday = new Date();
+                                    yesterday.setDate(today.getDate() - 1);
+                                    if (msgDate.toDateString() === today.toDateString()) {
+                                        dateLabel = 'Today';
+                                    } else if (msgDate.toDateString() === yesterday.toDateString()) {
+                                        dateLabel = 'Yesterday';
+                                    } else {
+                                        dateLabel = msgDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                                    }
+                                }
+
                                 return (
-                                    <div key={msg.id} style={{
+                                    <div key={msg.id}>
+                                    {showDateSep && (
+                                        <div style={{
+                                            display: 'flex', alignItems: 'center', gap: '8px',
+                                            margin: '16px 0 8px',
+                                        }}>
+                                            <div style={{ flex: 1, height: '1px', background: '#3f4147' }} />
+                                            <span style={{
+                                                fontSize: '11px', fontWeight: 700, color: '#949ba4',
+                                                padding: '2px 8px', background: '#2b2d31', borderRadius: '8px',
+                                                whiteSpace: 'nowrap',
+                                            }}>
+                                                {dateLabel}
+                                            </span>
+                                            <div style={{ flex: 1, height: '1px', background: '#3f4147' }} />
+                                        </div>
+                                    )}
+                                    <div style={{
                                         display: 'flex', gap: '10px',
                                         marginTop: grouped ? '2px' : '12px',
                                         padding: '2px 8px', borderRadius: '4px',
@@ -610,10 +765,45 @@ export default function ServerView() {
                                             </p>
                                         </div>
                                     </div>
+                                    </div>
                                 );
                             })}
                             <div ref={chatEndRef} />
                         </div>
+
+                        {/* Typing indicator */}
+                        {(() => {
+                            const names = Object.values(typingUsers);
+                            if (names.length === 0) return null;
+                            const text = names.length === 1
+                                ? `${names[0]} is typing...`
+                                : names.length === 2
+                                    ? `${names[0]} and ${names[1]} are typing...`
+                                    : `${names[0]} and ${names.length - 1} others are typing...`;
+                            return (
+                                <div style={{
+                                    padding: '2px 20px 0', fontSize: '12px', color: '#949ba4',
+                                    fontStyle: 'italic', height: '18px',
+                                }}>
+                                    <span style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: '6px',
+                                    }}>
+                                        <span style={{
+                                            display: 'inline-flex', gap: '2px',
+                                        }}>
+                                            {[0,1,2].map(i => (
+                                                <span key={i} style={{
+                                                    width: '4px', height: '4px', borderRadius: '50%',
+                                                    background: '#949ba4', display: 'inline-block',
+                                                    animation: `typingBounce 1.2s ${i * 0.2}s infinite`,
+                                                }} />
+                                            ))}
+                                        </span>
+                                        {text}
+                                    </span>
+                                </div>
+                            );
+                        })()}
 
                         {/* Chat input */}
                         <div style={{
@@ -625,7 +815,7 @@ export default function ServerView() {
                             }}>
                                 <textarea
                                     value={chatInput}
-                                    onChange={(e) => setChatInput(e.target.value)}
+                                    onChange={handleChatInputChange}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter' && !e.shiftKey) {
                                             e.preventDefault();

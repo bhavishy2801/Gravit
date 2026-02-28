@@ -120,6 +120,12 @@ router.post('/:postId', authenticate, async (req, res, next) => {
         `INSERT INTO notifications (user_id, type, title, message, link) VALUES ($1, $2, $3, $4, $5)`,
         [postAuthorId, 'comment', 'New comment on your post', `Someone commented on "${postTitle}".`, `/posts/${postId}`]
       );
+      // Push notification in real-time
+      const io = req.app.get('io');
+      io.to(`user:${postAuthorId}`).emit('notification:new', {
+        type: 'comment', title: 'New comment on your post',
+        message: `Someone commented on "${postTitle}".`, link: `/posts/${postId}`,
+      });
     }
 
     const comment = result.rows[0];

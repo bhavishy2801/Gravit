@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, ArrowBigUp, MessageSquare, Share2, Flag, Send, Loader, Trash2, X, Check } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useSocket } from '../contexts/SocketContext';
 import StateBadge from '../components/ui/StateBadge';
 import UrgencyMeter from '../components/ui/UrgencyMeter';
 import DMSTimer from '../components/ui/DMSTimer';
@@ -123,6 +124,60 @@ export default function PostDetail() {
         }
         loadData();
     }, [fetchPost, fetchComments]);
+
+    // Real-time: listen for comments and urgency updates on this post
+    const { joinPost, leavePost, on, off } = useSocket();
+
+    useEffect(() => {
+        if (!postId) return;
+        joinPost(postId);
+
+        const handleNewComment = (commentData) => {
+            setComments(prev => [...prev, commentData]);
+            setPost(prev => prev ? { ...prev, commentCount: (prev.commentCount || 0) + 1 } : prev);
+        };
+        const handleDeletedComment = ({ commentId }) => {
+            setComments(prev => prev.filter(c => c.id !== commentId));
+            setPost(prev => prev ? { ...prev, commentCount: Math.max(0, (prev.commentCount || 1) - 1) } : prev);
+        };
+        const handleUrgencyUpdate = ({ upvoteCount, score, state }) => {
+            setPost(prev => prev ? {
+                ...prev,
+                upvotes: upvoteCount ?? prev.upvotes,
+                urgencyScore: score ?? prev.urgencyScore,
+                state: state ?? prev.state,
+            } : prev);
+        };
+        const handleVerificationStart = ({ adminResponse, deadline }) => {
+            setPost(prev => prev ? {
+                ...prev,
+                state: 'pending_verification',
+                adminResponse,
+                verification: { deadline, yesCount: 0, noCount: 0, totalVotes: 0, resolutionDescription: adminResponse },
+            } : prev);
+        };
+        const handleVerificationVote = ({ yesCount, noCount, totalVotes }) => {
+            setPost(prev => prev ? {
+                ...prev,
+                verification: prev.verification ? { ...prev.verification, yesCount, noCount, totalVotes } : prev.verification,
+            } : prev);
+        };
+
+        on('comment:new', handleNewComment);
+        on('comment:deleted', handleDeletedComment);
+        on('urgency:update', handleUrgencyUpdate);
+        on('verification:start', handleVerificationStart);
+        on('verification:vote', handleVerificationVote);
+
+        return () => {
+            leavePost(postId);
+            off('comment:new', handleNewComment);
+            off('comment:deleted', handleDeletedComment);
+            off('urgency:update', handleUrgencyUpdate);
+            off('verification:start', handleVerificationStart);
+            off('verification:vote', handleVerificationVote);
+        };
+    }, [postId, joinPost, leavePost, on, off]);
 
     const handleUpvote = async () => {
         if (!post) return;

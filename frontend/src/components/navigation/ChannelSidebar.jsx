@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Hash, Plus, Search, Lock, GraduationCap, Landmark, Building2, Briefcase, Home } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSocket } from '../../contexts/SocketContext';
 import api from '../../services/api';
 
 const CATEGORY_ICONS = {
@@ -17,6 +18,7 @@ export default function ChannelSidebar({ selectedServer }) {
     const navigate = useNavigate();
     const location = useLocation();
     const { user } = useAuth();
+    const { on, off, joinServer, leaveServer } = useSocket();
 
     const [channels, setChannels] = useState([]);
     const [serverChannels, setServerChannels] = useState([]);
@@ -66,6 +68,29 @@ export default function ChannelSidebar({ selectedServer }) {
         }
         fetchServerData();
     }, [selectedServer]);
+
+    // Join server room for real-time channel updates
+    useEffect(() => {
+        if (!selectedServer?.startsWith('server-')) return;
+        const serverId = selectedServer.replace('server-', '');
+        joinServer(serverId);
+
+        const handleChannelCreated = ({ channel }) => {
+            setServerChannels(prev => [...prev, channel]);
+        };
+        const handleChannelDeleted = ({ channelId }) => {
+            setServerChannels(prev => prev.filter(c => c.id !== parseInt(channelId) && c.id !== channelId));
+        };
+
+        on('server:channel-created', handleChannelCreated);
+        on('server:channel-deleted', handleChannelDeleted);
+
+        return () => {
+            leaveServer(serverId);
+            off('server:channel-created', handleChannelCreated);
+            off('server:channel-deleted', handleChannelDeleted);
+        };
+    }, [selectedServer, joinServer, leaveServer, on, off]);
 
     const toggleCategory = (catId) => {
         setExpanded(prev => ({ ...prev, [catId]: !prev[catId] }));

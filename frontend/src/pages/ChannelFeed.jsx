@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Plus, SlidersHorizontal, Flame, Clock, ArrowBigUp, Loader } from 'lucide-react';
 import PostCard from '../components/posts/PostCard';
 import CreatePostModal from '../components/posts/CreatePostModal';
+import { useSocket } from '../contexts/SocketContext';
 import api from '../services/api';
 
 const sortOptions = [
@@ -65,6 +66,37 @@ export default function ChannelFeed() {
     useEffect(() => {
         fetchPosts();
     }, [fetchPosts]);
+
+    // Real-time: listen for new posts, deletions, and upvote updates
+    const { joinChannel, leaveChannel, on, off } = useSocket();
+
+    useEffect(() => {
+        if (!channelId) return;
+        joinChannel(channelId);
+
+        const handleNewPost = () => fetchPosts();
+        const handleDeletedPost = ({ postId }) => {
+            setPosts(prev => prev.filter(p => p.id !== postId));
+        };
+        const handlePostUpdated = ({ postId, upvoteCount, score, state }) => {
+            setPosts(prev => prev.map(p =>
+                p.id === postId
+                    ? { ...p, upvotes: upvoteCount ?? p.upvotes, urgencyScore: score ?? p.urgencyScore, state: state ?? p.state }
+                    : p
+            ));
+        };
+
+        on('post:new', handleNewPost);
+        on('post:deleted', handleDeletedPost);
+        on('post:updated', handlePostUpdated);
+
+        return () => {
+            leaveChannel(channelId);
+            off('post:new', handleNewPost);
+            off('post:deleted', handleDeletedPost);
+            off('post:updated', handlePostUpdated);
+        };
+    }, [channelId, joinChannel, leaveChannel, on, off, fetchPosts]);
 
     const handlePostCreated = () => {
         setShowModal(false);

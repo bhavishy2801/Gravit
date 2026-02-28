@@ -53,6 +53,45 @@ export function setupSocketHandlers(io) {
       socket.leave(`server-channel:${channelId}`);
     });
 
+    // Join/leave server rooms (for server-wide events: channels, members, etc.)
+    socket.on('join:server', (serverId) => {
+      socket.join(`server:${serverId}`);
+    });
+
+    socket.on('leave:server', (serverId) => {
+      socket.leave(`server:${serverId}`);
+    });
+
+    // Join personal room for user-specific events (notifications, server list updates)
+    if (socket.userId) {
+      socket.join(`user:${socket.userId}`);
+    }
+
+    // Join/leave server post rooms (for real-time thread updates)
+    socket.on('join:server-post', (postId) => {
+      socket.join(`server-post:${postId}`);
+    });
+
+    socket.on('leave:server-post', (postId) => {
+      socket.leave(`server-post:${postId}`);
+    });
+
+    // Typing indicators for server chat
+    socket.on('typing:start', ({ channelId }) => {
+      socket.to(`server-channel:${channelId}`).emit('typing:start', {
+        channelId,
+        userId: socket.userId,
+        pseudonym: socket.pseudonym,
+      });
+    });
+
+    socket.on('typing:stop', ({ channelId }) => {
+      socket.to(`server-channel:${channelId}`).emit('typing:stop', {
+        channelId,
+        userId: socket.userId,
+      });
+    });
+
     // Presence
     socket.on('disconnect', () => {
       console.log(`🔌 Socket disconnected: ${socket.id}`);

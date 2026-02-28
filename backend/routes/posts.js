@@ -358,6 +358,12 @@ router.post('/:id/upvote', authenticate, async (req, res, next) => {
           `INSERT INTO notifications (user_id, type, title, message, link) VALUES ($1, $2, $3, $4, $5)`,
           [authorId, 'upvote', 'Your post got an upvote!', `"${postTitle}" received an upvote.`, `/posts/${postId}`]
         );
+        // Push notification in real-time
+        const io = req.app.get('io');
+        io.to(`user:${authorId}`).emit('notification:new', {
+          type: 'upvote', title: 'Your post got an upvote!',
+          message: `"${postTitle}" received an upvote.`, link: `/posts/${postId}`,
+        });
       }
     }
 
@@ -406,6 +412,13 @@ router.post('/:id/upvote', authenticate, async (req, res, next) => {
           `"${postTitle}" in ${category} needs your attention (${hours}h to respond).`,
           `/posts/${postId}`]
         );
+        // Push escalation notification in real-time
+        const io = req.app.get('io');
+        io.to(`user:${auth.user_id}`).emit('notification:new', {
+          type: 'escalation', title: '⚠️ Post escalated to you',
+          message: `"${postTitle}" in ${category} needs your attention (${hours}h to respond).`,
+          link: `/posts/${postId}`,
+        });
       }
     }
 
@@ -413,14 +426,22 @@ router.post('/:id/upvote', authenticate, async (req, res, next) => {
     const countResult = await query('SELECT upvote_count FROM posts WHERE id = $1', [postId]);
     const upvoteCount = countResult.rows[0].upvote_count;
 
-    // Broadcast urgency update
+    // Broadcast urgency update to post room and channel room
     const io = req.app.get('io');
-    io.to(`post:${postId}`).emit('urgency:update', {
+    const urgencyData = {
       postId,
       score: newScore,
       state: newState,
       upvoteCount,
-    });
+    };
+    io.to(`post:${postId}`).emit('urgency:update', urgencyData);
+
+    // Also broadcast to channel feed viewers
+    const postChannelResult = await query('SELECT channel_id FROM posts WHERE id = $1', [postId]);
+    const postChannelId = postChannelResult.rows[0]?.channel_id;
+    if (postChannelId) {
+      io.to(`channel:${postChannelId}`).emit('post:updated', urgencyData);
+    }
 
     res.json({
       upvoted,

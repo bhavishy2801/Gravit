@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Hash, Search, Bell, HelpCircle, Users, Menu, X, ExternalLink, MessageCircle, Shield, BookOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSocket } from '../../contexts/SocketContext';
 import api from '../../services/api';
 
 export default function TopBar({ channelName = 'general', description = '', onMenuClick, selectedServer }) {
@@ -17,6 +18,7 @@ export default function TopBar({ channelName = 'general', description = '', onMe
     const [membersLoading, setMembersLoading] = useState(false);
     const searchInputRef = useRef(null);
     const searchTimerRef = useRef(null);
+    const { on, off } = useSocket();
 
     const serverId = selectedServer?.startsWith?.('server-') ? selectedServer.replace('server-', '') : null;
 
@@ -39,9 +41,20 @@ export default function TopBar({ channelName = 'general', description = '', onMe
             } catch { /* ignore */ }
         }
         fetchUnread();
-        const interval = setInterval(fetchUnread, 30000);
-        return () => clearInterval(interval);
-    }, []);
+
+        // Real-time: increment badge on new notification
+        const handleNewNotification = () => {
+            setUnreadCount(prev => prev + 1);
+        };
+        on('notification:new', handleNewNotification);
+
+        // Also poll less frequently as a fallback
+        const interval = setInterval(fetchUnread, 60000);
+        return () => {
+            clearInterval(interval);
+            off('notification:new', handleNewNotification);
+        };
+    }, [on, off]);
 
     // Keyboard shortcut Ctrl+K to open search
     useEffect(() => {

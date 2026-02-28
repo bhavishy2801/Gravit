@@ -63,6 +63,30 @@ export function SocketProvider({ children }) {
     socketRef.current?.emit('leave:server-channel', channelId);
   };
 
+  const joinServer = (serverId) => {
+    socketRef.current?.emit('join:server', serverId);
+  };
+
+  const leaveServer = (serverId) => {
+    socketRef.current?.emit('leave:server', serverId);
+  };
+
+  const joinServerPost = (postId) => {
+    socketRef.current?.emit('join:server-post', postId);
+  };
+
+  const leaveServerPost = (postId) => {
+    socketRef.current?.emit('leave:server-post', postId);
+  };
+
+  const emitTypingStart = (channelId) => {
+    socketRef.current?.emit('typing:start', { channelId });
+  };
+
+  const emitTypingStop = (channelId) => {
+    socketRef.current?.emit('typing:stop', { channelId });
+  };
+
   const on = (event, handler) => {
     socketRef.current?.on(event, handler);
   };
@@ -81,6 +105,12 @@ export function SocketProvider({ children }) {
       leavePost,
       joinServerChannel,
       leaveServerChannel,
+      joinServer,
+      leaveServer,
+      joinServerPost,
+      leaveServerPost,
+      emitTypingStart,
+      emitTypingStop,
       on,
       off,
     }}>

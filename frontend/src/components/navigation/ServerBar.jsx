@@ -1,8 +1,9 @@
-﻿import { useState, useEffect } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { BarChart3, LogOut, User, GraduationCap, Landmark, Building2, Briefcase, Home, Plus, Compass } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSocket } from '../../contexts/SocketContext';
 import api from '../../services/api';
 
 // Map category names to clean Lucide icons
@@ -18,8 +19,16 @@ export default function ServerBar({ selectedServer, onSelectServer }) {
     const navigate = useNavigate();
     const location = useLocation();
     const { logout, user } = useAuth();
+    const { on, off } = useSocket();
     const [channels, setChannels] = useState([]);
     const [customServers, setCustomServers] = useState([]);
+
+    const fetchServers = useCallback(async () => {
+        try {
+            const res = await api.get('/servers/mine').catch(() => ({ data: { servers: [] } }));
+            setCustomServers(res.data.servers || []);
+        } catch {}
+    }, []);
 
     useEffect(() => {
         async function fetchData() {
@@ -36,6 +45,30 @@ export default function ServerBar({ selectedServer, onSelectServer }) {
         }
         fetchData();
     }, []);
+
+    // Real-time server list updates via socket
+    useEffect(() => {
+        const handleServerCreated = () => fetchServers();
+        const handleServerJoined = () => fetchServers();
+        const handleServerLeft = ({ serverId }) => {
+            setCustomServers(prev => prev.filter(s => s.id !== parseInt(serverId) && s.id !== serverId));
+        };
+        const handleServerDeleted = ({ serverId }) => {
+            setCustomServers(prev => prev.filter(s => s.id !== parseInt(serverId) && s.id !== serverId));
+        };
+
+        on('server:created', handleServerCreated);
+        on('server:joined', handleServerJoined);
+        on('server:left', handleServerLeft);
+        on('server:deleted', handleServerDeleted);
+
+        return () => {
+            off('server:created', handleServerCreated);
+            off('server:joined', handleServerJoined);
+            off('server:left', handleServerLeft);
+            off('server:deleted', handleServerDeleted);
+        };
+    }, [on, off, fetchServers]);
 
     const isActive = (path) => location.pathname.startsWith(path);
 

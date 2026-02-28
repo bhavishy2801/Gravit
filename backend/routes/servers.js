@@ -171,20 +171,24 @@ router.post('/', authenticate, async (req, res, next) => {
       [server.id, 'general', 'General discussion']
     );
 
-    res.status(201).json({
-      server: {
-        id: server.id,
-        name: server.name,
-        description: server.description,
-        icon: server.icon,
-        isPublic: server.is_public,
-        hasPassword: !!server.password_hash,
-        inviteCode: server.invite_code,
-        memberCount: 1,
-        userRole: 'owner',
-        createdAt: server.created_at,
-      },
-    });
+    const serverData = {
+      id: server.id,
+      name: server.name,
+      description: server.description,
+      icon: server.icon,
+      isPublic: server.is_public,
+      hasPassword: !!server.password_hash,
+      inviteCode: server.invite_code,
+      memberCount: 1,
+      userRole: 'owner',
+      createdAt: server.created_at,
+    };
+
+    // Notify the creator's other sessions
+    const io = req.app.get('io');
+    io.to(`user:${req.user.id}`).emit('server:created', serverData);
+
+    res.status(201).json({ server: serverData });
   } catch (err) {
     next(err);
   }
@@ -235,6 +239,19 @@ router.post('/:id/join', authenticate, async (req, res, next) => {
       [serverId]
     );
 
+    // Get user info for broadcast
+    const userResult = await query('SELECT pseudonym, display_name, avatar_hue FROM users WHERE id = $1', [req.user.id]);
+    const u = userResult.rows[0];
+
+    const io = req.app.get('io');
+    // Notify the server room about new member
+    io.to(`server:${serverId}`).emit('server:member-joined', {
+      serverId,
+      member: { id: req.user.id, name: u.display_name || u.pseudonym, avatarHue: u.avatar_hue, serverRole: 'member' },
+    });
+    // Notify the joining user's sessions to update server list
+    io.to(`user:${req.user.id}`).emit('server:joined', { serverId, serverName: server.name });
+
     res.json({ message: 'Joined server successfully' });
   } catch (err) {
     next(err);
@@ -271,6 +288,10 @@ router.post('/:id/leave', authenticate, async (req, res, next) => {
       [serverId]
     );
 
+    const io = req.app.get('io');
+    io.to(`server:${serverId}`).emit('server:member-left', { serverId, userId: req.user.id });
+    io.to(`user:${req.user.id}`).emit('server:left', { serverId });
+
     res.json({ message: 'Left server successfully' });
   } catch (err) {
     next(err);
@@ -293,8 +314,18 @@ router.delete('/:id', authenticate, async (req, res, next) => {
       return res.status(403).json({ error: 'Only the server owner can delete the server' });
     }
 
+    // Get all member IDs before deleting to notify them
+    const membersResult = await query('SELECT user_id FROM server_members WHERE server_id = $1', [serverId]);
+    const memberIds = membersResult.rows.map(m => m.user_id);
+
     // Cascades delete members and channels
     await query('DELETE FROM servers WHERE id = $1', [serverId]);
+
+    // Notify all members that the server was deleted
+    const io = req.app.get('io');
+    for (const uid of memberIds) {
+      io.to(`user:${uid}`).emit('server:deleted', { serverId });
+    }
 
     res.json({ message: 'Server deleted successfully' });
   } catch (err) {
@@ -349,6 +380,11 @@ router.put('/:id/members/:userId/role', authenticate, async (req, res, next) => 
       'UPDATE server_members SET role = $1 WHERE server_id = $2 AND user_id = $3',
       [newRole, serverId, targetUserId]
     );
+
+    const io = req.app.get('io');
+    io.to(`server:${serverId}`).emit('server:member-role-changed', {
+      serverId, userId: targetUserId, newRole,
+    });
 
     res.json({ message: 'Role updated successfully' });
   } catch (err) {
@@ -466,16 +502,20 @@ router.post('/:id/channels', authenticate, async (req, res, next) => {
 
     const channel = result.rows[0];
 
-    res.status(201).json({
-      channel: {
-        id: channel.id,
-        name: channel.name,
-        description: channel.description,
-        isPrivate: channel.is_private,
-        hasPassword: !!channel.password_hash,
-        createdAt: channel.created_at,
-      },
-    });
+    const channelData = {
+      id: channel.id,
+      name: channel.name,
+      description: channel.description,
+      isPrivate: channel.is_private,
+      hasPassword: !!channel.password_hash,
+      createdAt: channel.created_at,
+    };
+
+    // Broadcast to all server members
+    const io = req.app.get('io');
+    io.to(`server:${serverId}`).emit('server:channel-created', { serverId, channel: channelData });
+
+    res.status(201).json({ channel: channelData });
   } catch (err) {
     next(err);
   }
@@ -511,6 +551,9 @@ router.delete('/:serverId/channels/:channelId', authenticate, async (req, res, n
       'DELETE FROM server_channels WHERE id = $1 AND server_id = $2',
       [channelId, serverId]
     );
+
+    const io = req.app.get('io');
+    io.to(`server:${serverId}`).emit('server:channel-deleted', { serverId, channelId });
 
     res.json({ message: 'Channel deleted' });
   } catch (err) {
@@ -563,6 +606,14 @@ router.post('/join-by-code', authenticate, async (req, res, next) => {
       'UPDATE servers SET member_count = member_count + 1 WHERE id = $1',
       [server.id]
     );
+
+    // Notify user's sessions + server members
+    const io = req.app.get('io');
+    io.to(`user:${req.user.id}`).emit('server:joined', { serverId: server.id, serverName: server.name });
+    io.to(`server:${server.id}`).emit('server:member-joined', {
+      serverId: server.id,
+      member: { id: req.user.id },
+    });
 
     res.json({
       message: 'Joined server successfully',
@@ -656,16 +707,27 @@ router.post('/:id/channels/:channelId/posts', authenticate, async (req, res, nex
     `, [serverId, channelId, req.user.id, title.trim(), content.trim()]);
 
     const post = result.rows[0];
-    res.status(201).json({
-      post: {
-        id: post.id,
-        title: post.title,
-        content: post.content,
-        authorId: post.author_id,
-        replyCount: 0,
-        createdAt: post.created_at,
-      },
-    });
+
+    // Get author info for broadcast
+    const userResult = await query('SELECT pseudonym, display_name, avatar_hue FROM users WHERE id = $1', [req.user.id]);
+    const u = userResult.rows[0];
+
+    const postData = {
+      id: post.id,
+      title: post.title,
+      content: post.content,
+      authorId: post.author_id,
+      author: u.display_name || u.pseudonym,
+      authorAvatarHue: u.avatar_hue,
+      replyCount: 0,
+      createdAt: post.created_at,
+    };
+
+    // Broadcast to channel viewers
+    const io = req.app.get('io');
+    io.to(`server-channel:${channelId}`).emit('server:post-created', { channelId, post: postData });
+
+    res.status(201).json({ post: postData });
   } catch (err) {
     next(err);
   }
@@ -782,16 +844,27 @@ router.post('/:id/posts/:postId/replies', authenticate, async (req, res, next) =
     await query('UPDATE server_posts SET reply_count = reply_count + 1 WHERE id = $1', [postId]);
 
     const r = result.rows[0];
-    res.status(201).json({
-      reply: {
-        id: r.id,
-        content: r.content,
-        authorId: r.author_id,
-        parentReplyId: r.parent_reply_id,
-        depth: r.depth,
-        createdAt: r.created_at,
-      },
-    });
+
+    // Get author info
+    const userResult = await query('SELECT pseudonym, display_name, avatar_hue FROM users WHERE id = $1', [req.user.id]);
+    const u = userResult.rows[0];
+
+    const replyData = {
+      id: r.id,
+      content: r.content,
+      authorId: r.author_id,
+      author: u.display_name || u.pseudonym,
+      authorAvatarHue: u.avatar_hue,
+      parentReplyId: r.parent_reply_id,
+      depth: r.depth,
+      createdAt: r.created_at,
+    };
+
+    // Broadcast to thread viewers
+    const io = req.app.get('io');
+    io.to(`server-post:${postId}`).emit('server:reply-created', { postId, reply: replyData });
+
+    res.status(201).json({ reply: replyData });
   } catch (err) {
     next(err);
   }
@@ -821,7 +894,17 @@ router.delete('/:id/posts/:postId', authenticate, async (req, res, next) => {
       return res.status(403).json({ error: 'Not authorized to delete this post' });
     }
 
+    // Get channel_id before deleting for broadcast
+    const postInfo = await query('SELECT channel_id FROM server_posts WHERE id = $1', [postId]);
+    const channelId = postInfo.rows[0]?.channel_id;
+
     await query('DELETE FROM server_posts WHERE id = $1', [postId]);
+
+    const io = req.app.get('io');
+    if (channelId) {
+      io.to(`server-channel:${channelId}`).emit('server:post-deleted', { postId, channelId });
+    }
+
     res.json({ message: 'Post deleted' });
   } catch (err) {
     next(err);
