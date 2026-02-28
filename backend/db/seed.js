@@ -46,6 +46,34 @@ async function seed() {
       { id: 'internships', name: 'internships', category: 'placement', icon: '💼', desc: 'Internship coordination', sort: 14 },
     ];
 
+    // ─── Hostel Channels ─────────────────────────
+    const hostels = ['B1','B2','B3','B4','B5','G1','G2','G3','G4','G5','G6','I2','I3','O3','O4','Y3','Y4'];
+    const hostelSubCategories = [
+      { suffix: '', label: 'General', desc: 'General hostel issues' },
+      { suffix: '-water', label: 'Water', desc: 'Water supply & quality issues' },
+      { suffix: '-sanitation', label: 'Sanitation', desc: 'Sanitation & cleanliness issues' },
+      { suffix: '-ac', label: 'AC', desc: 'AC repair & maintenance issues' },
+      { suffix: '-gym', label: 'Gym', desc: 'Gym equipment & access issues' },
+      { suffix: '-misc', label: 'Misc', desc: 'Miscellaneous hostel issues' },
+    ];
+
+    let hostelSort = 100;
+    for (const h of hostels) {
+      const hLower = h.toLowerCase();
+      for (const sub of hostelSubCategories) {
+        const channelId = `hostel-${hLower}${sub.suffix}`;
+        const channelName = sub.suffix ? `${h} ${sub.label}` : `${h} General`;
+        channelsData.push({
+          id: channelId,
+          name: channelName,
+          category: `hostel-${hLower}`,
+          icon: '🏠',
+          desc: `${h} — ${sub.desc}`,
+          sort: hostelSort++,
+        });
+      }
+    }
+
     for (const ch of channelsData) {
       await pool.query(`
         INSERT INTO channels (id, name, category, category_icon, description, sort_order)
@@ -53,7 +81,7 @@ async function seed() {
         ON CONFLICT (id) DO NOTHING
       `, [ch.id, ch.name, ch.category, ch.icon, ch.desc, ch.sort]);
     }
-    console.log('  ✅ 14 channels created');
+    console.log(`  ✅ ${channelsData.length} channels created (14 base + ${hostels.length * hostelSubCategories.length} hostel)`);
 
     // ─── Escalation Hierarchy ────────────────────
     const hierarchyData = [

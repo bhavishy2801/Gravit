@@ -4,10 +4,30 @@ import { OAuth2Client } from 'google-auth-library';
 import { query } from '../config/database.js';
 import { generateToken, authenticate } from '../middleware/auth.js';
 import { generatePseudonym } from '../services/pseudonym.js';
+import { generateOTP, storeOTP, verifyOTP, sendSMS } from '../services/otp.js';
 
 const router = Router();
 const ALLOWED_DOMAIN = process.env.ALLOWED_DOMAIN || 'iitj.ac.in';
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+// Helper to format user response
+function formatUser(user) {
+  return {
+    id: user.id,
+    email: user.email,
+    pseudonym: user.pseudonym,
+    displayName: user.display_name || null,
+    role: user.role,
+    avatarHue: user.avatar_hue,
+    phone: user.phone || null,
+    phoneVerified: user.phone_verified || false,
+    gender: user.gender || null,
+    hostel: user.hostel || null,
+    yearOfStudy: user.year_of_study || null,
+    programme: user.programme || null,
+    department: user.department || null,
+  };
+}
 
 // ═══════════════════════════════════════════════════════
 // POST /api/auth/register — Email + Password registration
@@ -61,15 +81,7 @@ router.post('/register', async (req, res, next) => {
 
     res.status(201).json({
       token,
-      user: {
-        id: user.id,
-        email: user.email,
-        pseudonym: user.pseudonym,
-        role: user.role,
-        avatarHue: user.avatar_hue,
-        phone: null,
-        phoneVerified: false,
-      },
+      user: formatUser(user),
     });
   } catch (err) {
     next(err);
@@ -113,15 +125,7 @@ router.post('/login', async (req, res, next) => {
 
     res.json({
       token,
-      user: {
-        id: user.id,
-        email: user.email,
-        pseudonym: user.pseudonym,
-        role: user.role,
-        avatarHue: user.avatar_hue,
-        phone: user.phone,
-        phoneVerified: user.phone_verified,
-      },
+      user: formatUser(user),
     });
   } catch (err) {
     next(err);
@@ -151,7 +155,7 @@ router.post('/google', async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid Google credential' });
     }
 
-    const { sub: googleId, email, email_verified } = payload;
+    const { sub: googleId, email, email_verified, name: googleName } = payload;
 
     if (!email_verified) {
       return res.status(403).json({ error: 'Email not verified by Google' });
@@ -175,9 +179,13 @@ router.post('/google', async (req, res, next) => {
 
     if (result.rows.length > 0) {
       user = result.rows[0];
-      // Link Google ID if not already linked
-      if (!user.google_id) {
-        await query('UPDATE users SET google_id = $1 WHERE id = $2', [googleId, user.id]);
+      // Link Google ID if not already linked, and update display_name
+      if (!user.google_id || !user.display_name) {
+        await query(
+          'UPDATE users SET google_id = COALESCE(google_id, $1), display_name = COALESCE(display_name, $3) WHERE id = $2',
+          [googleId, user.id, googleName || null]
+        );
+        if (!user.display_name && googleName) user.display_name = googleName;
       }
     } else {
       // Create new user
@@ -191,10 +199,10 @@ router.post('/google', async (req, res, next) => {
       const avatarHue = Math.floor(Math.random() * 360);
 
       const insertResult = await query(`
-        INSERT INTO users (email, google_id, pseudonym, role, institution_id, avatar_hue)
-        VALUES ($1, $2, $3, 'student', $4, $5)
+        INSERT INTO users (email, google_id, pseudonym, display_name, role, institution_id, avatar_hue)
+        VALUES ($1, $2, $3, $4, 'student', $5, $6)
         RETURNING *
-      `, [email.toLowerCase(), googleId, pseudonym, institutionId, avatarHue]);
+      `, [email.toLowerCase(), googleId, pseudonym, googleName || null, institutionId, avatarHue]);
 
       user = insertResult.rows[0];
     }
@@ -203,15 +211,7 @@ router.post('/google', async (req, res, next) => {
 
     res.json({
       token,
-      user: {
-        id: user.id,
-        email: user.email,
-        pseudonym: user.pseudonym,
-        role: user.role,
-        avatarHue: user.avatar_hue,
-        phone: user.phone,
-        phoneVerified: user.phone_verified,
-      },
+      user: formatUser(user),
     });
   } catch (err) {
     next(err);
@@ -241,11 +241,16 @@ router.post('/phone/send-otp', async (req, res, next) => {
       });
     }
 
-    // In production, integrate Twilio/MSG91 here
-    // For hackathon demo, OTP is always 123456
-    console.log(`📱 OTP for ${phone}: 123456 (demo mode)`);
+    // Generate and send real OTP
+    const code = generateOTP();
+    await storeOTP(phone, code, 'login');
 
-    res.json({ message: 'OTP sent successfully', demo: true });
+    const smsResult = await sendSMS(phone, `Your Gravit login OTP is: ${code}. Valid for 10 minutes.`);
+    if (!smsResult.success) {
+      console.warn('SMS failed, OTP stored in DB:', code);
+    }
+
+    res.json({ message: 'OTP sent successfully' });
   } catch (err) {
     next(err);
   }
@@ -262,9 +267,10 @@ router.post('/phone/verify-otp', async (req, res, next) => {
       return res.status(400).json({ error: 'Phone and OTP are required' });
     }
 
-    // Demo OTP validation (in production use Twilio verify)
-    if (otp !== '123456') {
-      return res.status(401).json({ error: 'Invalid OTP' });
+    // Verify OTP from database
+    const valid = await verifyOTP(phone, otp, 'login');
+    if (!valid) {
+      return res.status(401).json({ error: 'Invalid or expired OTP' });
     }
 
     const result = await query(
@@ -281,15 +287,7 @@ router.post('/phone/verify-otp', async (req, res, next) => {
 
     res.json({
       token,
-      user: {
-        id: user.id,
-        email: user.email,
-        pseudonym: user.pseudonym,
-        role: user.role,
-        avatarHue: user.avatar_hue,
-        phone: user.phone,
-        phoneVerified: user.phone_verified,
-      },
+      user: formatUser(user),
     });
   } catch (err) {
     next(err);
@@ -302,13 +300,7 @@ router.post('/phone/verify-otp', async (req, res, next) => {
 router.get('/me', authenticate, (req, res) => {
   res.json({
     user: {
-      id: req.user.id,
-      email: req.user.email,
-      pseudonym: req.user.pseudonym,
-      role: req.user.role,
-      avatarHue: req.user.avatar_hue,
-      phone: req.user.phone,
-      phoneVerified: req.user.phone_verified,
+      ...formatUser(req.user),
       createdAt: req.user.created_at,
     },
   });

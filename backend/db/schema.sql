@@ -22,6 +22,12 @@ CREATE TABLE IF NOT EXISTS users (
   phone_verified BOOLEAN DEFAULT FALSE,
   google_id VARCHAR(255) UNIQUE,
   pseudonym VARCHAR(50) NOT NULL,
+  display_name VARCHAR(100),
+  gender VARCHAR(20),
+  hostel VARCHAR(10),
+  year_of_study VARCHAR(20),
+  programme VARCHAR(30),
+  department VARCHAR(100),
   role VARCHAR(20) NOT NULL DEFAULT 'student'
     CHECK (role IN ('student', 'moderator', 'admin')),
   institution_id UUID REFERENCES institutions(id),
@@ -140,6 +146,25 @@ CREATE TABLE IF NOT EXISTS comment_upvotes (
   PRIMARY KEY (user_id, comment_id)
 );
 
+-- ─── Channel Read Tracking ──────────────────────────
+CREATE TABLE IF NOT EXISTS channel_reads (
+  user_id UUID NOT NULL REFERENCES users(id),
+  channel_id VARCHAR(50) NOT NULL REFERENCES channels(id),
+  last_read_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (user_id, channel_id)
+);
+
+-- ─── OTP Codes ──────────────────────────────────────
+CREATE TABLE IF NOT EXISTS otp_codes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  phone VARCHAR(20) NOT NULL,
+  code VARCHAR(10) NOT NULL,
+  purpose VARCHAR(30) NOT NULL DEFAULT 'verify',
+  expires_at TIMESTAMPTZ NOT NULL,
+  used BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ─── Indexes ────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_posts_channel ON posts(channel_id);
 CREATE INDEX IF NOT EXISTS idx_posts_state ON posts(state);
@@ -153,3 +178,5 @@ CREATE INDEX IF NOT EXISTS idx_escalations_post ON escalations(post_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
 CREATE INDEX IF NOT EXISTS idx_users_google ON users(google_id);
+CREATE INDEX IF NOT EXISTS idx_channel_reads_user ON channel_reads(user_id);
+CREATE INDEX IF NOT EXISTS idx_otp_phone ON otp_codes(phone, purpose);

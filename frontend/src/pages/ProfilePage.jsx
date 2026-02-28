@@ -1,8 +1,36 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { User, Mail, Phone, Shield, Key, CheckCircle, AlertCircle, Loader } from 'lucide-react';
+import { User, Mail, Phone, Key, CheckCircle, AlertCircle, Loader, Save } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
+
+const VALID_HOSTELS = ['B1','B2','B3','B4','B5','G1','G2','G3','G4','G5','G6','I2','I3','O3','O4','Y3','Y4'];
+const VALID_GENDERS = ['male', 'female', 'non-binary', 'prefer-not-to-say'];
+const VALID_PROGRAMMES = ['B.Tech', 'M.Tech', 'M.Sc', 'Ph.D', 'MBA', 'M.Des', 'Other'];
+
+const selectStyle = {
+  width: '100%',
+  padding: '10px 12px',
+  borderRadius: '4px',
+  background: '#1a1b1e',
+  color: '#f2f3f5',
+  border: '1px solid rgba(255,255,255,0.1)',
+  fontSize: '13px',
+  outline: 'none',
+  appearance: 'auto',
+};
+
+const inputStyle = {
+  width: '100%',
+  padding: '10px 12px',
+  borderRadius: '4px',
+  background: '#1a1b1e',
+  color: '#f2f3f5',
+  border: '1px solid rgba(255,255,255,0.1)',
+  fontSize: '13px',
+  outline: 'none',
+  boxSizing: 'border-box',
+};
 
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
@@ -12,12 +40,23 @@ export default function ProfilePage() {
   // Phone linking
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
-  const [phoneStep, setPhoneStep] = useState('idle'); // idle, sent, verifying
+  const [phoneStep, setPhoneStep] = useState('idle');
   const [phoneMsg, setPhoneMsg] = useState('');
 
   // Password
   const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' });
   const [passMsg, setPassMsg] = useState('');
+
+  // Profile editing
+  const [profileForm, setProfileForm] = useState({
+    gender: '',
+    hostel: '',
+    yearOfStudy: '',
+    programme: '',
+    department: '',
+  });
+  const [profileMsg, setProfileMsg] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -26,7 +65,15 @@ export default function ProfilePage() {
   async function loadProfile() {
     try {
       const res = await api.get('/users/profile');
-      setProfile(res.data.profile);
+      const p = res.data.profile;
+      setProfile(p);
+      setProfileForm({
+        gender: p.gender || '',
+        hostel: p.hostel || '',
+        yearOfStudy: p.yearOfStudy || '',
+        programme: p.programme || '',
+        department: p.department || '',
+      });
     } catch (err) {
       console.error('Failed to load profile:', err);
     } finally {
@@ -40,7 +87,7 @@ export default function ProfilePage() {
       setPhoneMsg('');
       await api.post('/users/phone/link', { phone });
       setPhoneStep('sent');
-      setPhoneMsg('OTP sent! For demo, use: 123456');
+      setPhoneMsg('OTP sent to your phone!');
     } catch (err) {
       setPhoneMsg(err.response?.data?.error || 'Failed to link phone');
     }
@@ -81,10 +128,39 @@ export default function ProfilePage() {
     }
   }
 
+  // ─── Profile Update ───────────────────────────
+  async function handleProfileUpdate() {
+    setSavingProfile(true);
+    setProfileMsg('');
+    try {
+      const payload = {};
+      if (profileForm.gender) payload.gender = profileForm.gender;
+      if (profileForm.hostel && !profile.hostel) payload.hostel = profileForm.hostel;
+      if (profileForm.yearOfStudy) payload.yearOfStudy = parseInt(profileForm.yearOfStudy);
+      if (profileForm.programme) payload.programme = profileForm.programme;
+      if (profileForm.department) payload.department = profileForm.department;
+
+      if (Object.keys(payload).length === 0) {
+        setProfileMsg('No changes to save');
+        setSavingProfile(false);
+        return;
+      }
+
+      await api.put('/users/profile', payload);
+      setProfileMsg('Profile updated successfully!');
+      await refreshUser();
+      await loadProfile();
+    } catch (err) {
+      setProfileMsg(err.response?.data?.error || 'Failed to update profile');
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
   if (loading) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#949ba4' }}>
-        <Loader size={24} className="animate-pulse-red" /> Loading profile...
+        <Loader size={24} style={{ animation: 'spin 1s linear infinite' }} /> Loading profile...
       </div>
     );
   }
@@ -104,10 +180,10 @@ export default function ProfilePage() {
         background: '#1a1b1e',
       }}>
         <h1 style={{ fontSize: '20px', fontWeight: 700, color: '#f2f3f5', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <User size={22} /> Profile Settings
+          <User size={22} /> Profile & Settings
         </h1>
         <p style={{ fontSize: '13px', color: '#949ba4', marginTop: '2px' }}>
-          Manage your account, link phone number, and security settings
+          Manage your account, profile details, and security settings
         </p>
       </div>
 
@@ -134,12 +210,22 @@ export default function ProfilePage() {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '24px', fontWeight: 800, color: '#fff',
               }}>
-                {profile?.pseudonym?.slice(5, 7) || '??'}
+                {(profile?.displayName || profile?.pseudonym)?.slice(0, 2)?.toUpperCase() || '??'}
               </div>
               <div>
-                <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#f2f3f5' }}>
+                {profile?.displayName && (
+                  <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#f2f3f5' }}>
+                    {profile.displayName}
+                  </h2>
+                )}
+                <div style={{
+                  fontSize: profile?.displayName ? '13px' : '22px',
+                  fontWeight: profile?.displayName ? 400 : 700,
+                  color: profile?.displayName ? '#949ba4' : '#f2f3f5',
+                  marginTop: profile?.displayName ? '2px' : 0,
+                }}>
                   {profile?.pseudonym}
-                </h2>
+                </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                   <span style={{
                     padding: '2px 10px',
@@ -155,6 +241,11 @@ export default function ProfilePage() {
                   <span style={{ fontSize: '12px', color: '#949ba4' }}>
                     🏛️ {profile?.institution}
                   </span>
+                  {profile?.hostel && (
+                    <span style={{ fontSize: '12px', color: '#949ba4' }}>
+                      🏠 {profile.hostel}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -168,8 +259,139 @@ export default function ProfilePage() {
                 verified={profile?.phoneVerified}
                 missing={!profile?.phone}
               />
-              <InfoRow icon={<Shield size={16} />} label="Google" value={profile?.hasGoogle ? 'Connected' : 'Not connected'} verified={profile?.hasGoogle} />
               <InfoRow icon={<Key size={16} />} label="Password" value={profile?.hasPassword ? 'Set' : 'Not set'} verified={profile?.hasPassword} />
+            </div>
+          </motion.div>
+
+          {/* ─── Profile Details ──────────────────── */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            style={{
+              padding: '24px',
+              background: '#141517',
+              borderRadius: '8px',
+              border: '1px solid rgba(255,255,255,0.06)',
+            }}
+          >
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#f2f3f5', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <User size={18} /> Profile Details
+            </h3>
+            <p style={{ fontSize: '13px', color: '#949ba4', marginBottom: '16px' }}>
+              Update your profile information. Hostel can only be set once.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* Gender */}
+              <div>
+                <label style={{ fontSize: '12px', color: '#949ba4', marginBottom: '4px', display: 'block' }}>Gender</label>
+                <select
+                  value={profileForm.gender}
+                  onChange={(e) => setProfileForm(f => ({ ...f, gender: e.target.value }))}
+                  style={selectStyle}
+                >
+                  <option value="">Select gender</option>
+                  {VALID_GENDERS.map(g => (
+                    <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1).replace(/-/g, ' ')}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Hostel */}
+              <div>
+                <label style={{ fontSize: '12px', color: '#949ba4', marginBottom: '4px', display: 'block' }}>
+                  Hostel {profile?.hostel && <span style={{ color: '#f0b232' }}>(locked — already set to {profile.hostel})</span>}
+                </label>
+                <select
+                  value={profileForm.hostel}
+                  onChange={(e) => setProfileForm(f => ({ ...f, hostel: e.target.value }))}
+                  disabled={!!profile?.hostel}
+                  style={{ ...selectStyle, opacity: profile?.hostel ? 0.5 : 1 }}
+                >
+                  <option value="">Select hostel</option>
+                  {VALID_HOSTELS.map(h => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Programme */}
+              <div>
+                <label style={{ fontSize: '12px', color: '#949ba4', marginBottom: '4px', display: 'block' }}>Programme</label>
+                <select
+                  value={profileForm.programme}
+                  onChange={(e) => setProfileForm(f => ({ ...f, programme: e.target.value }))}
+                  style={selectStyle}
+                >
+                  <option value="">Select programme</option>
+                  {VALID_PROGRAMMES.map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Year of Study */}
+              <div>
+                <label style={{ fontSize: '12px', color: '#949ba4', marginBottom: '4px', display: 'block' }}>Year of Study</label>
+                <select
+                  value={profileForm.yearOfStudy}
+                  onChange={(e) => setProfileForm(f => ({ ...f, yearOfStudy: e.target.value }))}
+                  style={selectStyle}
+                >
+                  <option value="">Select year</option>
+                  {[1, 2, 3, 4, 5].map(y => (
+                    <option key={y} value={y}>Year {y}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Department */}
+              <div>
+                <label style={{ fontSize: '12px', color: '#949ba4', marginBottom: '4px', display: 'block' }}>Department</label>
+                <input
+                  type="text"
+                  value={profileForm.department}
+                  onChange={(e) => setProfileForm(f => ({ ...f, department: e.target.value }))}
+                  placeholder="e.g. Computer Science"
+                  style={inputStyle}
+                />
+              </div>
+
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={handleProfileUpdate}
+                disabled={savingProfile}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  padding: '10px',
+                  borderRadius: '4px',
+                  background: '#5865f2',
+                  color: '#fff',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  opacity: savingProfile ? 0.5 : 1,
+                  alignSelf: 'flex-start',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <Save size={14} /> {savingProfile ? 'Saving...' : 'Save Profile'}
+              </motion.button>
+
+              {profileMsg && (
+                <p style={{
+                  fontSize: '12px',
+                  color: profileMsg.includes('success') ? '#23a559' : '#da373c',
+                  display: 'flex', alignItems: 'center', gap: '4px',
+                }}>
+                  {profileMsg.includes('success') ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
+                  {profileMsg}
+                </p>
+              )}
             </div>
           </motion.div>
 
@@ -177,7 +399,7 @@ export default function ProfilePage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
+            transition={{ delay: 0.2 }}
             style={{
               padding: '24px',
               background: '#141517',
@@ -202,7 +424,7 @@ export default function ProfilePage() {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+91 9876543210"
-                    style={{ flex: 1 }}
+                    style={{ ...inputStyle, flex: 1, width: 'auto' }}
                     disabled={phoneStep === 'sent'}
                   />
                   <motion.button
@@ -216,6 +438,8 @@ export default function ProfilePage() {
                       color: '#fff',
                       fontSize: '13px',
                       fontWeight: 600,
+                      border: 'none',
+                      cursor: 'pointer',
                       opacity: !phone || phoneStep === 'sent' ? 0.5 : 1,
                     }}
                   >
@@ -231,7 +455,7 @@ export default function ProfilePage() {
                       onChange={(e) => setOtp(e.target.value)}
                       placeholder="Enter 6-digit OTP"
                       maxLength={6}
-                      style={{ flex: 1 }}
+                      style={{ ...inputStyle, flex: 1, width: 'auto' }}
                     />
                     <motion.button
                       whileTap={{ scale: 0.95 }}
@@ -244,6 +468,8 @@ export default function ProfilePage() {
                         color: '#fff',
                         fontSize: '13px',
                         fontWeight: 600,
+                        border: 'none',
+                        cursor: 'pointer',
                         opacity: otp.length !== 6 ? 0.5 : 1,
                       }}
                     >
@@ -288,7 +514,7 @@ export default function ProfilePage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
+            transition={{ delay: 0.3 }}
             style={{
               padding: '24px',
               background: '#141517',
@@ -312,6 +538,7 @@ export default function ProfilePage() {
                   value={passwords.current}
                   onChange={(e) => setPasswords(p => ({ ...p, current: e.target.value }))}
                   placeholder="Current password"
+                  style={inputStyle}
                 />
               )}
               <input
@@ -319,12 +546,14 @@ export default function ProfilePage() {
                 value={passwords.new}
                 onChange={(e) => setPasswords(p => ({ ...p, new: e.target.value }))}
                 placeholder="New password (min 6 characters)"
+                style={inputStyle}
               />
               <input
                 type="password"
                 value={passwords.confirm}
                 onChange={(e) => setPasswords(p => ({ ...p, confirm: e.target.value }))}
                 placeholder="Confirm new password"
+                style={inputStyle}
               />
 
               <motion.button
@@ -338,6 +567,8 @@ export default function ProfilePage() {
                   color: '#fff',
                   fontSize: '13px',
                   fontWeight: 600,
+                  border: 'none',
+                  cursor: 'pointer',
                   opacity: !passwords.new || passwords.new.length < 6 ? 0.5 : 1,
                   alignSelf: 'flex-start',
                 }}
@@ -356,30 +587,6 @@ export default function ProfilePage() {
                 </p>
               )}
             </form>
-          </motion.div>
-
-          {/* ─── Login Methods Summary ─────────────── */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            style={{
-              padding: '16px 20px',
-              background: 'rgba(88,101,242,0.06)',
-              borderRadius: '8px',
-              border: '1px solid rgba(88,101,242,0.15)',
-              fontSize: '13px',
-              color: '#b5bac1',
-            }}
-          >
-            <div style={{ fontWeight: 600, color: '#f2f3f5', marginBottom: '8px' }}>
-              🔐 Available Login Methods
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <LoginMethod label="Google OAuth" enabled={profile?.hasGoogle} />
-              <LoginMethod label="Email + Password" enabled={profile?.hasPassword} />
-              <LoginMethod label="Phone + OTP" enabled={profile?.phoneVerified} />
-            </div>
           </motion.div>
 
         </div>
@@ -410,18 +617,6 @@ function InfoRow({ icon, label, value, verified, missing }) {
           {verified ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
         </span>
       )}
-    </div>
-  );
-}
-
-function LoginMethod({ label, enabled }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-      <span style={{ color: enabled ? '#23a559' : '#949ba4' }}>
-        {enabled ? '✅' : '⬜'}
-      </span>
-      <span style={{ color: enabled ? '#f2f3f5' : '#949ba4' }}>{label}</span>
-      {!enabled && <span style={{ fontSize: '11px', color: '#949ba4', fontStyle: 'italic' }}>— not configured</span>}
     </div>
   );
 }

@@ -17,6 +17,7 @@ router.get('/', optionalAuth, async (req, res, next) => {
     let sql = `
       SELECT p.*,
         u.pseudonym as author,
+        u.display_name as author_display_name,
         u.avatar_hue as author_avatar_hue,
         c.category as category_id
       FROM posts p
@@ -80,7 +81,8 @@ router.get('/', optionalAuth, async (req, res, next) => {
       id: p.id,
       title: p.title,
       content: p.content,
-      author: p.author,
+      author: p.author_display_name || p.author,
+      authorId: p.author_id,
       authorAvatarHue: p.author_avatar_hue,
       channelId: p.channel_id,
       categoryId: p.category_id,
@@ -111,6 +113,7 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
     const result = await query(`
       SELECT p.*,
         u.pseudonym as author,
+        u.display_name as author_display_name,
         u.avatar_hue as author_avatar_hue,
         c.category as category_id
       FROM posts p
@@ -172,7 +175,8 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
         id: p.id,
         title: p.title,
         content: p.content,
-        author: p.author,
+        author: p.author_display_name || p.author,
+        authorId: p.author_id,
         authorAvatarHue: p.author_avatar_hue,
         channelId: p.channel_id,
         categoryId: p.category_id,
@@ -207,9 +211,24 @@ router.post('/', authenticate, rbac('student', 'moderator'), async (req, res, ne
     }
 
     // Verify channel exists
-    const channelCheck = await query('SELECT id FROM channels WHERE id = $1', [channelId]);
+    const channelCheck = await query('SELECT id, category FROM channels WHERE id = $1', [channelId]);
     if (channelCheck.rows.length === 0) {
       return res.status(400).json({ error: 'Invalid channel' });
+    }
+
+    // Hostel channel restriction: if channel starts with "hostel-", user must belong to that hostel
+    const channel = channelCheck.rows[0];
+    if (channelId.startsWith('hostel-')) {
+      // Extract hostel code: "hostel-b1" → "B1", "hostel-b1-water" → "B1"
+      const parts = channelId.replace('hostel-', '').split('-');
+      const hostelCode = parts[0].toUpperCase();
+      const userHostel = req.user.hostel;
+      if (!userHostel) {
+        return res.status(403).json({ error: 'Please set your hostel in your profile before posting to hostel channels' });
+      }
+      if (userHostel !== hostelCode && req.user.role === 'student') {
+        return res.status(403).json({ error: `You can only post in your own hostel (${userHostel}) channels` });
+      }
     }
 
     const result = await query(`
@@ -220,8 +239,8 @@ router.post('/', authenticate, rbac('student', 'moderator'), async (req, res, ne
 
     const post = result.rows[0];
 
-    // Get author pseudonym
-    const userResult = await query('SELECT pseudonym, avatar_hue FROM users WHERE id = $1', [req.user.id]);
+    // Get author info
+    const userResult = await query('SELECT pseudonym, display_name, avatar_hue FROM users WHERE id = $1', [req.user.id]);
     const author = userResult.rows[0];
 
     // Emit new post event
@@ -230,7 +249,7 @@ router.post('/', authenticate, rbac('student', 'moderator'), async (req, res, ne
       id: post.id,
       title: post.title,
       channelId: post.channel_id,
-      author: author.pseudonym,
+      author: author.display_name || author.pseudonym,
       urgencyScore: 0,
       state: 'open',
     });
@@ -240,7 +259,7 @@ router.post('/', authenticate, rbac('student', 'moderator'), async (req, res, ne
         id: post.id,
         title: post.title,
         content: post.content,
-        author: author.pseudonym,
+        author: author.display_name || author.pseudonym,
         authorAvatarHue: author.avatar_hue,
         channelId: post.channel_id,
         tags: post.tags,
@@ -455,6 +474,40 @@ router.post('/:id/verify', authenticate, rbac('student', 'moderator'), async (re
       noCount: counts.no_count,
       totalVotes: counts.total_votes,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// DELETE /api/posts/:id — Delete a post (author, moderator, or admin)
+// ═══════════════════════════════════════════════════════
+router.delete('/:id', authenticate, async (req, res, next) => {
+  try {
+    const postId = req.params.id;
+
+    // Fetch the post to check ownership
+    const postResult = await query('SELECT author_id, channel_id FROM posts WHERE id = $1', [postId]);
+    if (postResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    const post = postResult.rows[0];
+    const isOwner = post.author_id === req.user.id;
+    const isPrivileged = ['admin', 'moderator'].includes(req.user.role);
+
+    if (!isOwner && !isPrivileged) {
+      return res.status(403).json({ error: 'You can only delete your own posts' });
+    }
+
+    // Delete (cascades to upvotes, comments, comment_upvotes)
+    await query('DELETE FROM posts WHERE id = $1', [postId]);
+
+    // Broadcast deletion
+    const io = req.app.get('io');
+    io.to(`channel:${post.channel_id}`).emit('post:deleted', { postId });
+
+    res.json({ message: 'Post deleted successfully' });
   } catch (err) {
     next(err);
   }

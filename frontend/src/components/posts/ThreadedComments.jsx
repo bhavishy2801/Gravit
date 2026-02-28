@@ -1,6 +1,6 @@
 ﻿import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowBigUp, Reply, CornerDownRight, Send, X } from 'lucide-react';
+import { ArrowBigUp, Reply, CornerDownRight, Send, X, Trash2 } from 'lucide-react';
 
 function timeAgo(dateStr) {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -16,7 +16,7 @@ function getDepth(path) {
     return path.split('/').length - 1;
 }
 
-export default function ThreadedComments({ comments, onReply, onUpvote }) {
+export default function ThreadedComments({ comments, onReply, onUpvote, onDelete, currentUser }) {
     const [replyingTo, setReplyingTo] = useState(null);
     const [replyText, setReplyText] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -154,6 +154,26 @@ export default function ThreadedComments({ comments, onReply, onUpvote }) {
                                         <Reply size={14} />
                                         <span>Reply</span>
                                     </button>
+                                    {currentUser && (currentUser.id === comment.authorId || currentUser.role === 'admin' || currentUser.role === 'moderator') && (
+                                        <button
+                                            onClick={() => onDelete?.(comment.id)}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: '4px',
+                                                fontSize: '12px',
+                                                color: '#da373c',
+                                                padding: '2px 6px', borderRadius: '4px',
+                                                transition: 'all 0.15s',
+                                                background: 'transparent',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                            }}
+                                            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(218,55,60,0.1)'; }}
+                                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                                        >
+                                            <Trash2 size={12} />
+                                            <span>Delete</span>
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </motion.div>

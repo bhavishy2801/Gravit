@@ -1,7 +1,8 @@
 ﻿import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, ArrowBigUp, MessageSquare, Share2, Flag, Send, Loader } from 'lucide-react';
+import { ArrowLeft, ArrowBigUp, MessageSquare, Share2, Flag, Send, Loader, Trash2 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import StateBadge from '../components/ui/StateBadge';
 import UrgencyMeter from '../components/ui/UrgencyMeter';
 import DMSTimer from '../components/ui/DMSTimer';
@@ -22,11 +23,40 @@ function timeAgo(dateStr) {
 export default function PostDetail() {
     const { postId } = useParams();
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [commentText, setCommentText] = useState('');
     const [post, setPost] = useState(null);
     const [comments, setComments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [submittingComment, setSubmittingComment] = useState(false);
+
+    const canDelete = post && user && (
+        user.id === post.authorId ||
+        user.role === 'admin' ||
+        user.role === 'moderator'
+    );
+
+    const handleDeletePost = async () => {
+        if (!window.confirm('Are you sure you want to delete this post? This cannot be undone.')) return;
+        try {
+            await api.delete(`/posts/${postId}`);
+            navigate(-1);
+        } catch (err) {
+            console.error('Failed to delete post:', err);
+            alert(err.response?.data?.error || 'Failed to delete post');
+        }
+    };
+
+    const handleDeleteComment = async (commentId) => {
+        if (!window.confirm('Delete this comment?')) return;
+        try {
+            await api.delete(`/comments/${commentId}`);
+            await fetchComments();
+            setPost(prev => prev ? { ...prev, commentCount: Math.max(0, prev.commentCount - 1) } : prev);
+        } catch (err) {
+            console.error('Failed to delete comment:', err);
+        }
+    };
 
     const fetchPost = useCallback(async () => {
         try {
@@ -312,6 +342,23 @@ export default function PostDetail() {
                                 }}>
                                     <Flag size={16} /> Report
                                 </button>
+
+                                {canDelete && (
+                                    <motion.button
+                                        whileTap={{ scale: 0.9 }}
+                                        onClick={handleDeletePost}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: '6px',
+                                            padding: '6px 14px', borderRadius: '4px',
+                                            background: 'rgba(218,55,60,0.1)',
+                                            color: '#da373c', fontSize: '13px', fontWeight: 600,
+                                            border: '1px solid rgba(218,55,60,0.2)',
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        <Trash2 size={16} /> Delete
+                                    </motion.button>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -380,6 +427,8 @@ export default function PostDetail() {
                         comments={comments}
                         onReply={handleReply}
                         onUpvote={handleCommentUpvote}
+                        onDelete={handleDeleteComment}
+                        currentUser={user}
                     />
                 </div>
 

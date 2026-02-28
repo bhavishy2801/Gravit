@@ -35,7 +35,7 @@ export async function authenticate(req, res, next) {
 
     // Fetch fresh user data
     const result = await query(
-      'SELECT id, email, pseudonym, role, institution_id, phone, phone_verified, avatar_hue, created_at FROM users WHERE id = $1',
+      'SELECT id, email, pseudonym, display_name, role, institution_id, phone, phone_verified, avatar_hue, gender, hostel, year_of_study, programme, department, created_at FROM users WHERE id = $1',
       [decoded.id]
     );
 
@@ -70,7 +70,7 @@ export async function optionalAuth(req, res, next) {
     const decoded = jwt.verify(token, JWT_SECRET);
 
     const result = await query(
-      'SELECT id, email, pseudonym, role, institution_id, phone, phone_verified, avatar_hue FROM users WHERE id = $1',
+      'SELECT id, email, pseudonym, display_name, role, institution_id, phone, phone_verified, avatar_hue, gender, hostel, year_of_study, programme, department FROM users WHERE id = $1',
       [decoded.id]
     );
 

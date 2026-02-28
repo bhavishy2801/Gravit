@@ -208,7 +208,7 @@ export default function ChannelSidebar() {
                                                 <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                     {channel.name}
                                                 </span>
-                                                {channel.activePostCount > 0 && (
+                                                {channel.unreadCount > 0 && (
                                                     <span style={{
                                                         fontSize: '10px',
                                                         fontWeight: 700,
@@ -219,7 +219,7 @@ export default function ChannelSidebar() {
                                                         minWidth: '18px',
                                                         textAlign: 'center',
                                                     }}>
-                                                        {channel.activePostCount}
+                                                        {channel.unreadCount}
                                                     </span>
                                                 )}
                                             </motion.button>
@@ -255,7 +255,7 @@ export default function ChannelSidebar() {
                     fontWeight: 700,
                     color: '#fff',
                 }}>
-                    {user?.pseudonym?.slice(0, 2) || '??'}
+                    {(user?.displayName || user?.pseudonym)?.slice(0, 2)?.toUpperCase() || '??'}
                 </div>
                 <div style={{ flex: 1, overflow: 'hidden' }}>
                     <div style={{
@@ -266,7 +266,7 @@ export default function ChannelSidebar() {
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
                     }}>
-                        {user?.pseudonym || 'Anonymous'}
+                        {user?.displayName || user?.pseudonym || 'Anonymous'}
                     </div>
                     <div style={{
                         fontSize: '11px',

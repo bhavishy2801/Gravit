@@ -13,6 +13,7 @@ router.get('/:postId', optionalAuth, async (req, res, next) => {
     const result = await query(`
       SELECT c.*,
         u.pseudonym as author,
+        u.display_name as author_display_name,
         u.avatar_hue as author_avatar_hue
       FROM comments c
       JOIN users u ON c.author_id = u.id
@@ -33,7 +34,8 @@ router.get('/:postId', optionalAuth, async (req, res, next) => {
     const comments = result.rows.map(c => ({
       id: c.id,
       postId: c.post_id,
-      author: c.author,
+      author: c.author_display_name || c.author,
+      authorId: c.author_id,
       authorAvatarHue: c.author_avatar_hue,
       content: c.content,
       path: c.path,
@@ -154,6 +156,59 @@ router.post('/:commentId/upvote', authenticate, async (req, res, next) => {
       upvoted: existing.rows.length === 0,
       upvoteCount: result.rows[0]?.upvote_count || 0,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// DELETE /api/comments/:commentId — Delete a comment (author, moderator, or admin)
+// ═══════════════════════════════════════════════════════
+router.delete('/:commentId', authenticate, async (req, res, next) => {
+  try {
+    const commentId = req.params.commentId;
+
+    // Fetch the comment to check ownership
+    const commentResult = await query(
+      'SELECT author_id, post_id FROM comments WHERE id = $1',
+      [commentId]
+    );
+    if (commentResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+
+    const comment = commentResult.rows[0];
+    const isOwner = comment.author_id === req.user.id;
+    const isPrivileged = ['admin', 'moderator'].includes(req.user.role);
+
+    if (!isOwner && !isPrivileged) {
+      return res.status(403).json({ error: 'You can only delete your own comments' });
+    }
+
+    // Count this comment + its children for decrementing post comment_count
+    const childCount = await query(
+      `SELECT COUNT(*) as cnt FROM comments WHERE post_id = $1 AND path LIKE (SELECT path FROM comments WHERE id = $2) || '%'`,
+      [comment.post_id, commentId]
+    );
+    const deleteCount = parseInt(childCount.rows[0].cnt);
+
+    // Delete comment (children with matching path prefix will be orphaned, so delete them too)
+    await query(
+      `DELETE FROM comments WHERE id = $1 OR (post_id = $2 AND path LIKE (SELECT path FROM comments WHERE id = $1) || '/%')`,
+      [commentId, comment.post_id]
+    );
+
+    // Update comment count on post
+    await query(
+      'UPDATE posts SET comment_count = GREATEST(comment_count - $1, 0) WHERE id = $2',
+      [deleteCount, comment.post_id]
+    );
+
+    // Broadcast
+    const io = req.app.get('io');
+    io.to(`post:${comment.post_id}`).emit('comment:deleted', { commentId });
+
+    res.json({ message: 'Comment deleted successfully' });
   } catch (err) {
     next(err);
   }

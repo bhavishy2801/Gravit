@@ -56,6 +56,11 @@ export default function ChannelFeed() {
         fetchChannelInfo();
     }, [channelId]);
 
+    // Mark channel as read when visiting
+    useEffect(() => {
+        api.post(`/channels/${channelId}/read`).catch(() => {});
+    }, [channelId]);
+
     // Fetch posts when channel or sort changes
     useEffect(() => {
         fetchPosts();

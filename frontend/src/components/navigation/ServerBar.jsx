@@ -196,12 +196,12 @@ export default function ServerBar() {
             <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => { }}
+                onClick={() => navigate('/profile')}
                 title="Settings"
                 style={{
                     width: '48px',
                     height: '48px',
-                    borderRadius: '24px',
+                    borderRadius: isActive('/profile') && !isActive('/profile/') ? '16px' : '24px',
                     background: '#1a1b1e',
                     display: 'flex',
                     alignItems: 'center',
