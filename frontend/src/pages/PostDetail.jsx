@@ -163,11 +163,26 @@ export default function PostDetail() {
             } : prev);
         };
 
+        // Dead-man's switch auto-escalation (from cron)
+        const handleDmsTriggered = ({ newState, score }) => {
+            setPost(prev => prev ? {
+                ...prev,
+                state: newState ?? prev.state,
+                urgencyScore: score ?? prev.urgencyScore,
+            } : prev);
+        };
+        // Verification poll expiry (from cron) — resolved or rejected
+        const handleStatusChange = ({ newState }) => {
+            setPost(prev => prev ? { ...prev, state: newState ?? prev.state } : prev);
+        };
+
         on('comment:new', handleNewComment);
         on('comment:deleted', handleDeletedComment);
         on('urgency:update', handleUrgencyUpdate);
         on('verification:start', handleVerificationStart);
         on('verification:vote', handleVerificationVote);
+        on('dms:triggered', handleDmsTriggered);
+        on('status:change', handleStatusChange);
 
         return () => {
             leavePost(postId);
@@ -176,6 +191,8 @@ export default function PostDetail() {
             off('urgency:update', handleUrgencyUpdate);
             off('verification:start', handleVerificationStart);
             off('verification:vote', handleVerificationVote);
+            off('dms:triggered', handleDmsTriggered);
+            off('status:change', handleStatusChange);
         };
     }, [postId, joinPost, leavePost, on, off]);
 
