@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useMemo } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 
@@ -39,81 +39,33 @@ export function SocketProvider({ children }) {
     };
   }, [token]);
 
-  const joinChannel = (channelId) => {
-    socketRef.current?.emit('join:channel', channelId);
-  };
-
-  const leaveChannel = (channelId) => {
-    socketRef.current?.emit('leave:channel', channelId);
-  };
-
-  const joinPost = (postId) => {
-    socketRef.current?.emit('join:post', postId);
-  };
-
-  const leavePost = (postId) => {
-    socketRef.current?.emit('leave:post', postId);
-  };
-
-  const joinServerChannel = (channelId) => {
-    socketRef.current?.emit('join:server-channel', channelId);
-  };
-
-  const leaveServerChannel = (channelId) => {
-    socketRef.current?.emit('leave:server-channel', channelId);
-  };
-
-  const joinServer = (serverId) => {
-    socketRef.current?.emit('join:server', serverId);
-  };
-
-  const leaveServer = (serverId) => {
-    socketRef.current?.emit('leave:server', serverId);
-  };
-
-  const joinServerPost = (postId) => {
-    socketRef.current?.emit('join:server-post', postId);
-  };
-
-  const leaveServerPost = (postId) => {
-    socketRef.current?.emit('leave:server-post', postId);
-  };
-
-  const emitTypingStart = (channelId) => {
-    socketRef.current?.emit('typing:start', { channelId });
-  };
-
-  const emitTypingStop = (channelId) => {
-    socketRef.current?.emit('typing:stop', { channelId });
-  };
-
-  const on = (event, handler) => {
-    socketRef.current?.on(event, handler);
-  };
-
-  const off = (event, handler) => {
-    socketRef.current?.off(event, handler);
-  };
+  // Memoize the context value so helpers have STABLE references.
+  // They only get new identities when 'connected' changes (connect / reconnect),
+  // which correctly re-triggers consumer useEffects that depend on them.
+  const value = useMemo(() => {
+    const s = socketRef.current;
+    return {
+      socket: s,
+      connected,
+      joinChannel:       (id) => s?.emit('join:channel', id),
+      leaveChannel:      (id) => s?.emit('leave:channel', id),
+      joinPost:          (id) => s?.emit('join:post', id),
+      leavePost:         (id) => s?.emit('leave:post', id),
+      joinServerChannel: (id) => s?.emit('join:server-channel', id),
+      leaveServerChannel:(id) => s?.emit('leave:server-channel', id),
+      joinServer:        (id) => s?.emit('join:server', id),
+      leaveServer:       (id) => s?.emit('leave:server', id),
+      joinServerPost:    (id) => s?.emit('join:server-post', id),
+      leaveServerPost:   (id) => s?.emit('leave:server-post', id),
+      emitTypingStart:   (channelId) => s?.emit('typing:start', { channelId }),
+      emitTypingStop:    (channelId) => s?.emit('typing:stop', { channelId }),
+      on:  (event, handler) => s?.on(event, handler),
+      off: (event, handler) => s?.off(event, handler),
+    };
+  }, [connected]);
 
   return (
-    <SocketContext.Provider value={{
-      socket: socketRef.current,
-      connected,
-      joinChannel,
-      leaveChannel,
-      joinPost,
-      leavePost,
-      joinServerChannel,
-      leaveServerChannel,
-      joinServer,
-      leaveServer,
-      joinServerPost,
-      leaveServerPost,
-      emitTypingStart,
-      emitTypingStop,
-      on,
-      off,
-    }}>
+    <SocketContext.Provider value={value}>
       {children}
     </SocketContext.Provider>
   );

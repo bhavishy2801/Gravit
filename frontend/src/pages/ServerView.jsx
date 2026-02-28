@@ -67,7 +67,7 @@ export default function ServerView() {
     const chatEndRef = useRef(null);
     const chatContainerRef = useRef(null);
 
-    const { joinServerChannel, leaveServerChannel, joinServer, leaveServer, joinServerPost, leaveServerPost, emitTypingStart, emitTypingStop, on, off } = useSocket();
+    const { joinServerChannel, leaveServerChannel, joinServerPost, leaveServerPost, emitTypingStart, emitTypingStop, on, off } = useSocket();
 
     // Typing indicator state
     const [typingUsers, setTypingUsers] = useState({}); // { [userId]: pseudonym }
@@ -94,10 +94,9 @@ export default function ServerView() {
 
     useEffect(() => { fetchServer(); }, [fetchServer]);
 
-    // Join server room for real-time channel/member updates
+    // Listen for server-wide real-time events (ChannelSidebar manages the room join)
     useEffect(() => {
         if (!serverId) return;
-        joinServer(serverId);
 
         const handleChannelCreated = ({ channel }) => {
             setChannels(prev => [...prev, channel]);
@@ -116,14 +115,13 @@ export default function ServerView() {
         on('server:member-role-changed', handleMemberRoleChanged);
 
         return () => {
-            leaveServer(serverId);
             off('server:channel-created', handleChannelCreated);
             off('server:channel-deleted', handleChannelDeleted);
             off('server:member-joined', handleMemberJoined);
             off('server:member-left', handleMemberLeft);
             off('server:member-role-changed', handleMemberRoleChanged);
         };
-    }, [serverId, joinServer, leaveServer, on, off, fetchServer]);
+    }, [serverId, on, off, fetchServer]);
 
     const fetchPosts = useCallback(async () => {
         if (!activeChannelId) return;
@@ -179,9 +177,9 @@ export default function ServerView() {
         };
         on('chat:message', handleNewMessage);
 
-        // Typing indicators
+        // Typing indicators (use == for type-safe comparison: channelId may be number or string)
         const handleTypingStart = ({ channelId, userId, pseudonym }) => {
-            if (channelId !== activeChannelId) return;
+            if (String(channelId) !== String(activeChannelId)) return;
             setTypingUsers(prev => ({ ...prev, [userId]: pseudonym }));
             // Auto-clear after 4s in case stop event is lost
             setTimeout(() => {
@@ -193,7 +191,7 @@ export default function ServerView() {
             }, 4000);
         };
         const handleTypingStop = ({ channelId, userId }) => {
-            if (channelId !== activeChannelId) return;
+            if (String(channelId) !== String(activeChannelId)) return;
             setTypingUsers(prev => {
                 const next = { ...prev };
                 delete next[userId];

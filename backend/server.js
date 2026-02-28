@@ -58,7 +58,7 @@ app.use(express.urlencoded({ extended: true }));
 // Rate limiting (relaxed in development)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
-  max: process.env.NODE_ENV === 'production' ? 200 : 10000,
+  max: process.env.NODE_ENV === 'production' ? 1000 : 10000,
   message: { error: 'Too many requests, please try again later.' },
 });
 app.use('/api/', limiter);
