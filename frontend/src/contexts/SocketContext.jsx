@@ -55,6 +55,14 @@ export function SocketProvider({ children }) {
     socketRef.current?.emit('leave:post', postId);
   };
 
+  const joinServerChannel = (channelId) => {
+    socketRef.current?.emit('join:server-channel', channelId);
+  };
+
+  const leaveServerChannel = (channelId) => {
+    socketRef.current?.emit('leave:server-channel', channelId);
+  };
+
   const on = (event, handler) => {
     socketRef.current?.on(event, handler);
   };
@@ -71,6 +79,8 @@ export function SocketProvider({ children }) {
       leaveChannel,
       joinPost,
       leavePost,
+      joinServerChannel,
+      leaveServerChannel,
       on,
       off,
     }}>

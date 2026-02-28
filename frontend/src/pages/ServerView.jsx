@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -6,6 +6,7 @@ import {
     Send, MessageCircle, Copy, Check, Key
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useSocket } from '../contexts/SocketContext';
 import api from '../services/api';
 
 export default function ServerView() {
@@ -55,6 +56,19 @@ export default function ServerView() {
     // Role change
     const [roleLoading, setRoleLoading] = useState(null);
 
+    // View mode: 'chat' or 'threads'
+    const [viewMode, setViewMode] = useState('chat');
+
+    // Chat messages
+    const [chatMessages, setChatMessages] = useState([]);
+    const [chatLoading, setChatLoading] = useState(false);
+    const [chatInput, setChatInput] = useState('');
+    const [chatSending, setChatSending] = useState(false);
+    const chatEndRef = useRef(null);
+    const chatContainerRef = useRef(null);
+
+    const { joinServerChannel, leaveServerChannel, on, off } = useSocket();
+
     const fetchServer = useCallback(async () => {
         try {
             const [srvRes, chRes] = await Promise.all([
@@ -93,6 +107,63 @@ export default function ServerView() {
         setActivePost(null);
         setReplies([]);
     }, [fetchPosts]);
+
+    // Chat: fetch messages when channel changes
+    const fetchChatMessages = useCallback(async () => {
+        if (!activeChannelId) return;
+        setChatLoading(true);
+        try {
+            const res = await api.get(`/servers/${serverId}/channels/${activeChannelId}/messages`);
+            setChatMessages(res.data.messages || []);
+        } catch (err) {
+            console.error('Failed to load chat:', err);
+        } finally {
+            setChatLoading(false);
+        }
+    }, [serverId, activeChannelId]);
+
+    useEffect(() => {
+        fetchChatMessages();
+    }, [fetchChatMessages]);
+
+    // Chat: scroll to bottom when new messages arrive
+    useEffect(() => {
+        if (viewMode === 'chat' && chatEndRef.current) {
+            chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [chatMessages, viewMode]);
+
+    // Chat: socket.io join/leave channel room & listen for messages
+    useEffect(() => {
+        if (!activeChannelId) return;
+        joinServerChannel(activeChannelId);
+
+        const handleNewMessage = (msg) => {
+            setChatMessages(prev => [...prev, msg]);
+        };
+        on('chat:message', handleNewMessage);
+
+        return () => {
+            leaveServerChannel(activeChannelId);
+            off('chat:message', handleNewMessage);
+        };
+    }, [activeChannelId, joinServerChannel, leaveServerChannel, on, off]);
+
+    const handleSendChat = async () => {
+        if (!chatInput.trim() || chatSending) return;
+        setChatSending(true);
+        try {
+            await api.post(`/servers/${serverId}/channels/${activeChannelId}/messages`, {
+                content: chatInput.trim(),
+            });
+            setChatInput('');
+            // Message will arrive via socket broadcast
+        } catch (err) {
+            alert(err.response?.data?.error || 'Failed to send message');
+        } finally {
+            setChatSending(false);
+        }
+    };
 
     const fetchMembers = async () => {
         try {
@@ -405,123 +476,271 @@ export default function ServerView() {
                 </div>
             </div>
 
-            {/* ═══ Center: Channel feed / posts ═══ */}
+            {/* ═══ Center: Channel feed — Chat / Threads tabs ═══ */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                {/* Channel header */}
+                {/* Channel header + tabs */}
                 <div style={{
-                    padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)',
-                    display: 'flex', alignItems: 'center', gap: '8px', minHeight: '48px',
+                    borderBottom: '1px solid rgba(255,255,255,0.06)',
+                    minHeight: '48px',
                 }}>
-                    {activeChannel ? (
-                        <>
-                            {activeChannel.isPrivate ? <Lock size={18} color="#da373c" /> : <Hash size={18} color="#949ba4" />}
-                            <span style={{ fontSize: '16px', fontWeight: 700, color: '#f2f3f5' }}>
-                                {activeChannel.name}
-                            </span>
-                            {activeChannel.description && (
-                                <>
-                                    <div style={{ width: '1px', height: '20px', background: '#3f4147', margin: '0 8px' }} />
-                                    <span style={{ fontSize: '13px', color: '#949ba4' }}>{activeChannel.description}</span>
-                                </>
-                            )}
-                        </>
-                    ) : (
-                        <span style={{ fontSize: '14px', color: '#949ba4' }}>Select a channel</span>
-                    )}
-                    <div style={{ flex: 1 }} />
-                    {activeChannel && (
-                        <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={() => setShowCreatePost(true)}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: '6px',
-                                padding: '6px 14px', borderRadius: '4px',
-                                background: '#5865f2', color: '#fff',
-                                fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer',
-                            }}
-                        >
-                            <Plus size={14} /> New Thread
-                        </motion.button>
-                    )}
-                </div>
-
-                {/* Posts list */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: '8px 16px' }}>
-                    {postsLoading && (
-                        <div style={{ padding: '32px', textAlign: 'center', color: '#949ba4' }}>
-                            <Loader size={20} style={{ animation: 'spin 1s linear infinite' }} />
-                        </div>
-                    )}
-
-                    {!postsLoading && posts.length === 0 && activeChannel && (
-                        <div style={{ padding: '48px 20px', textAlign: 'center', color: '#949ba4' }}>
-                            <MessageCircle size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
-                            <p style={{ fontSize: '15px', fontWeight: 600, color: '#f2f3f5', marginBottom: '4px' }}>
-                                No threads yet
-                            </p>
-                            <p style={{ fontSize: '13px' }}>
-                                Start a discussion in #{activeChannel.name}
-                            </p>
-                        </div>
-                    )}
-
-                    {!postsLoading && posts.map((post) => (
-                        <motion.div
-                            key={post.id}
-                            initial={{ opacity: 0, y: 5 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            onClick={() => openThread(post)}
-                            style={{
-                                padding: '12px 16px', borderRadius: '8px',
-                                background: activePost?.id === post.id ? '#2e3035' : '#1e1f22',
-                                marginBottom: '6px', cursor: 'pointer',
-                                border: '1px solid rgba(255,255,255,0.04)',
-                                transition: 'background 0.15s',
-                            }}
-                            onMouseEnter={e => { if (activePost?.id !== post.id) e.currentTarget.style.background = '#252729'; }}
-                            onMouseLeave={e => { if (activePost?.id !== post.id) e.currentTarget.style.background = '#1e1f22'; }}
-                        >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                                <div style={{
-                                    width: '28px', height: '28px', borderRadius: '50%',
-                                    background: `hsl(${post.authorAvatarHue || 0}, 60%, 45%)`,
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    fontSize: '10px', fontWeight: 700, color: '#fff',
-                                }}>
-                                    {post.author?.slice(0, 2)?.toUpperCase()}
-                                </div>
-                                <span style={{ fontSize: '13px', fontWeight: 600, color: '#f2f3f5' }}>{post.author}</span>
-                                <span style={{ fontSize: '11px', color: '#949ba4' }}>{timeAgo(post.createdAt)}</span>
-                                <div style={{ flex: 1 }} />
-                                {(post.authorId === user?.id || canManage) && (
-                                    <span
-                                        onClick={(e) => { e.stopPropagation(); handleDeletePost(post.id); }}
-                                        style={{ color: '#949ba4', opacity: 0.4, cursor: 'pointer', display: 'flex' }}
-                                        onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                                        onMouseLeave={e => e.currentTarget.style.opacity = '0.4'}
-                                    >
-                                        <Trash2 size={14} />
-                                    </span>
+                    <div style={{
+                        padding: '8px 20px 0',
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                    }}>
+                        {activeChannel ? (
+                            <>
+                                {activeChannel.isPrivate ? <Lock size={18} color="#da373c" /> : <Hash size={18} color="#949ba4" />}
+                                <span style={{ fontSize: '16px', fontWeight: 700, color: '#f2f3f5' }}>
+                                    {activeChannel.name}
+                                </span>
+                                {activeChannel.description && (
+                                    <>
+                                        <div style={{ width: '1px', height: '20px', background: '#3f4147', margin: '0 8px' }} />
+                                        <span style={{ fontSize: '13px', color: '#949ba4' }}>{activeChannel.description}</span>
+                                    </>
                                 )}
-                            </div>
-                            <h4 style={{ fontSize: '15px', fontWeight: 700, color: '#f2f3f5', marginBottom: '4px' }}>
-                                {post.title}
-                            </h4>
-                            <p style={{
-                                fontSize: '13px', color: '#b5bac1', marginBottom: '6px', lineHeight: 1.4,
-                                overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box',
-                                WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-                            }}>
-                                {post.content}
-                            </p>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#949ba4' }}>
-                                <MessageCircle size={13} />
-                                <span>{post.replyCount} replies</span>
-                            </div>
-                        </motion.div>
-                    ))}
+                            </>
+                        ) : (
+                            <span style={{ fontSize: '14px', color: '#949ba4' }}>Select a channel</span>
+                        )}
+                        <div style={{ flex: 1 }} />
+                        {activeChannel && viewMode === 'threads' && (
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => setShowCreatePost(true)}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                    padding: '6px 14px', borderRadius: '4px',
+                                    background: '#5865f2', color: '#fff',
+                                    fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer',
+                                }}
+                            >
+                                <Plus size={14} /> New Thread
+                            </motion.button>
+                        )}
+                    </div>
+                    {/* Tabs */}
+                    {activeChannel && (
+                        <div style={{ display: 'flex', gap: '0', padding: '0 20px', marginTop: '8px' }}>
+                            {['chat', 'threads'].map(tab => (
+                                <button
+                                    key={tab}
+                                    onClick={() => setViewMode(tab)}
+                                    style={{
+                                        padding: '6px 16px', fontSize: '13px', fontWeight: 600,
+                                        color: viewMode === tab ? '#f2f3f5' : '#949ba4',
+                                        background: 'none', border: 'none', cursor: 'pointer',
+                                        borderBottom: viewMode === tab ? '2px solid #5865f2' : '2px solid transparent',
+                                        textTransform: 'capitalize',
+                                        transition: 'color 0.15s, border-color 0.15s',
+                                    }}
+                                >
+                                    {tab === 'chat' ? <><Send size={13} style={{ marginRight: '6px', verticalAlign: 'middle' }} />Chat</> : <><MessageCircle size={13} style={{ marginRight: '6px', verticalAlign: 'middle' }} />Threads</>}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
+
+                {/* ─── Chat view ─── */}
+                {viewMode === 'chat' && activeChannel && (
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                        {/* Messages */}
+                        <div ref={chatContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+                            {chatLoading && (
+                                <div style={{ padding: '32px', textAlign: 'center', color: '#949ba4' }}>
+                                    <Loader size={20} style={{ animation: 'spin 1s linear infinite' }} />
+                                </div>
+                            )}
+                            {!chatLoading && chatMessages.length === 0 && (
+                                <div style={{ padding: '48px 20px', textAlign: 'center', color: '#949ba4' }}>
+                                    <Send size={36} style={{ opacity: 0.3, marginBottom: '12px' }} />
+                                    <p style={{ fontSize: '15px', fontWeight: 600, color: '#f2f3f5', marginBottom: '4px' }}>
+                                        No messages yet
+                                    </p>
+                                    <p style={{ fontSize: '13px' }}>
+                                        Be the first to say something in #{activeChannel.name}!
+                                    </p>
+                                </div>
+                            )}
+                            {chatMessages.map((msg, idx) => {
+                                const prevMsg = chatMessages[idx - 1];
+                                const sameAuthor = prevMsg && prevMsg.authorId === msg.authorId;
+                                const withinMinute = prevMsg && (new Date(msg.createdAt) - new Date(prevMsg.createdAt)) < 60000;
+                                const grouped = sameAuthor && withinMinute;
+                                return (
+                                    <div key={msg.id} style={{
+                                        display: 'flex', gap: '10px',
+                                        marginTop: grouped ? '2px' : '12px',
+                                        padding: '2px 8px', borderRadius: '4px',
+                                    }}
+                                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                    >
+                                        {/* Avatar or spacer */}
+                                        <div style={{ width: '36px', flexShrink: 0 }}>
+                                            {!grouped && (
+                                                <div style={{
+                                                    width: '36px', height: '36px', borderRadius: '50%',
+                                                    background: `hsl(${msg.authorAvatarHue || 0}, 60%, 45%)`,
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    fontSize: '12px', fontWeight: 700, color: '#fff',
+                                                }}>
+                                                    {msg.author?.slice(0, 2)?.toUpperCase()}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            {!grouped && (
+                                                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '2px' }}>
+                                                    <span style={{ fontSize: '14px', fontWeight: 600, color: '#f2f3f5' }}>
+                                                        {msg.author}
+                                                    </span>
+                                                    <span style={{ fontSize: '11px', color: '#949ba4' }}>
+                                                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            <p style={{
+                                                fontSize: '14px', color: '#dcddde', lineHeight: 1.4,
+                                                whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0,
+                                            }}>
+                                                {msg.content}
+                                            </p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            <div ref={chatEndRef} />
+                        </div>
+
+                        {/* Chat input */}
+                        <div style={{
+                            padding: '0 16px 16px',
+                        }}>
+                            <div style={{
+                                display: 'flex', alignItems: 'flex-end', gap: '8px',
+                                background: '#2b2d31', borderRadius: '8px', padding: '4px 4px 4px 16px',
+                            }}>
+                                <textarea
+                                    value={chatInput}
+                                    onChange={(e) => setChatInput(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            handleSendChat();
+                                        }
+                                    }}
+                                    placeholder={`Message #${activeChannel.name}`}
+                                    rows={1}
+                                    style={{
+                                        flex: 1, padding: '8px 0', background: 'transparent',
+                                        border: 'none', color: '#f2f3f5', fontSize: '14px',
+                                        outline: 'none', resize: 'none',
+                                        minHeight: '20px', maxHeight: '120px',
+                                        fontFamily: 'inherit', lineHeight: 1.4,
+                                    }}
+                                />
+                                <motion.button
+                                    whileTap={{ scale: 0.9 }}
+                                    onClick={handleSendChat}
+                                    disabled={chatSending || !chatInput.trim()}
+                                    style={{
+                                        width: '36px', height: '36px', borderRadius: '6px',
+                                        background: chatInput.trim() ? '#5865f2' : 'transparent',
+                                        color: chatInput.trim() ? '#fff' : '#949ba4',
+                                        border: 'none',
+                                        cursor: chatInput.trim() ? 'pointer' : 'default',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        flexShrink: 0,
+                                    }}
+                                >
+                                    <Send size={18} />
+                                </motion.button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ─── Threads view ─── */}
+                {viewMode === 'threads' && (
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '8px 16px' }}>
+                        {postsLoading && (
+                            <div style={{ padding: '32px', textAlign: 'center', color: '#949ba4' }}>
+                                <Loader size={20} style={{ animation: 'spin 1s linear infinite' }} />
+                            </div>
+                        )}
+
+                        {!postsLoading && posts.length === 0 && activeChannel && (
+                            <div style={{ padding: '48px 20px', textAlign: 'center', color: '#949ba4' }}>
+                                <MessageCircle size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
+                                <p style={{ fontSize: '15px', fontWeight: 600, color: '#f2f3f5', marginBottom: '4px' }}>
+                                    No threads yet
+                                </p>
+                                <p style={{ fontSize: '13px' }}>
+                                    Start a discussion in #{activeChannel.name}
+                                </p>
+                            </div>
+                        )}
+
+                        {!postsLoading && posts.map((post) => (
+                            <motion.div
+                                key={post.id}
+                                initial={{ opacity: 0, y: 5 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                onClick={() => openThread(post)}
+                                style={{
+                                    padding: '12px 16px', borderRadius: '8px',
+                                    background: activePost?.id === post.id ? '#2e3035' : '#1e1f22',
+                                    marginBottom: '6px', cursor: 'pointer',
+                                    border: '1px solid rgba(255,255,255,0.04)',
+                                    transition: 'background 0.15s',
+                                }}
+                                onMouseEnter={e => { if (activePost?.id !== post.id) e.currentTarget.style.background = '#252729'; }}
+                                onMouseLeave={e => { if (activePost?.id !== post.id) e.currentTarget.style.background = '#1e1f22'; }}
+                            >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                                    <div style={{
+                                        width: '28px', height: '28px', borderRadius: '50%',
+                                        background: `hsl(${post.authorAvatarHue || 0}, 60%, 45%)`,
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        fontSize: '10px', fontWeight: 700, color: '#fff',
+                                    }}>
+                                        {post.author?.slice(0, 2)?.toUpperCase()}
+                                    </div>
+                                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#f2f3f5' }}>{post.author}</span>
+                                    <span style={{ fontSize: '11px', color: '#949ba4' }}>{timeAgo(post.createdAt)}</span>
+                                    <div style={{ flex: 1 }} />
+                                    {(post.authorId === user?.id || canManage) && (
+                                        <span
+                                            onClick={(e) => { e.stopPropagation(); handleDeletePost(post.id); }}
+                                            style={{ color: '#949ba4', opacity: 0.4, cursor: 'pointer', display: 'flex' }}
+                                            onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                                            onMouseLeave={e => e.currentTarget.style.opacity = '0.4'}
+                                        >
+                                            <Trash2 size={14} />
+                                        </span>
+                                    )}
+                                </div>
+                                <h4 style={{ fontSize: '15px', fontWeight: 700, color: '#f2f3f5', marginBottom: '4px' }}>
+                                    {post.title}
+                                </h4>
+                                <p style={{
+                                    fontSize: '13px', color: '#b5bac1', marginBottom: '6px', lineHeight: 1.4,
+                                    overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box',
+                                    WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                                }}>
+                                    {post.content}
+                                </p>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#949ba4' }}>
+                                    <MessageCircle size={13} />
+                                    <span>{post.replyCount} replies</span>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* ═══ Right: Thread panel ═══ */}

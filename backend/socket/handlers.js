@@ -44,6 +44,15 @@ export function setupSocketHandlers(io) {
       socket.leave(`post:${postId}`);
     });
 
+    // Join/leave server channel rooms (for real-time chat)
+    socket.on('join:server-channel', (channelId) => {
+      socket.join(`server-channel:${channelId}`);
+    });
+
+    socket.on('leave:server-channel', (channelId) => {
+      socket.leave(`server-channel:${channelId}`);
+    });
+
     // Presence
     socket.on('disconnect', () => {
       console.log(`🔌 Socket disconnected: ${socket.id}`);

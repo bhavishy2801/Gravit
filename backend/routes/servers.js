@@ -528,7 +528,7 @@ router.post('/join-by-code', authenticate, async (req, res, next) => {
       return res.status(400).json({ error: 'Invite code is required' });
     }
 
-    const serverResult = await query('SELECT * FROM servers WHERE invite_code = $1', [inviteCode.trim()]);
+    const serverResult = await query('SELECT * FROM servers WHERE UPPER(invite_code) = UPPER($1)', [inviteCode.trim()]);
     if (serverResult.rows.length === 0) {
       return res.status(404).json({ error: 'Invalid invite code. No server found.' });
     }
@@ -823,6 +823,119 @@ router.delete('/:id/posts/:postId', authenticate, async (req, res, next) => {
 
     await query('DELETE FROM server_posts WHERE id = $1', [postId]);
     res.json({ message: 'Post deleted' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// GET /api/servers/:id/channels/:channelId/messages — Get chat messages
+// ═══════════════════════════════════════════════════════
+router.get('/:id/channels/:channelId/messages', authenticate, async (req, res, next) => {
+  try {
+    const { id: serverId, channelId } = req.params;
+    const { before, limit = 50 } = req.query;
+
+    // Verify membership
+    const memberCheck = await query(
+      'SELECT 1 FROM server_members WHERE server_id = $1 AND user_id = $2',
+      [serverId, req.user.id]
+    );
+    if (memberCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'You are not a member of this server' });
+    }
+
+    let sql = `
+      SELECT m.*, u.pseudonym as author, u.display_name as author_display_name,
+             u.avatar_hue as author_avatar_hue
+      FROM server_chat_messages m
+      JOIN users u ON m.author_id = u.id
+      WHERE m.server_id = $1 AND m.channel_id = $2
+    `;
+    const params = [serverId, channelId];
+
+    if (before) {
+      sql += ` AND m.created_at < $3 ORDER BY m.created_at DESC LIMIT $4`;
+      params.push(before, Math.min(parseInt(limit), 100));
+    } else {
+      sql += ` ORDER BY m.created_at DESC LIMIT $3`;
+      params.push(Math.min(parseInt(limit), 100));
+    }
+
+    const result = await query(sql, params);
+
+    res.json({
+      messages: result.rows.reverse().map(m => ({
+        id: m.id,
+        content: m.content,
+        authorId: m.author_id,
+        author: m.author_display_name || m.author,
+        authorAvatarHue: m.author_avatar_hue,
+        createdAt: m.created_at,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// POST /api/servers/:id/channels/:channelId/messages — Send a chat message
+// ═══════════════════════════════════════════════════════
+router.post('/:id/channels/:channelId/messages', authenticate, async (req, res, next) => {
+  try {
+    const { id: serverId, channelId } = req.params;
+    const { content } = req.body;
+
+    if (!content?.trim()) {
+      return res.status(400).json({ error: 'Message content is required' });
+    }
+
+    // Verify membership
+    const memberCheck = await query(
+      'SELECT 1 FROM server_members WHERE server_id = $1 AND user_id = $2',
+      [serverId, req.user.id]
+    );
+    if (memberCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'You are not a member of this server' });
+    }
+
+    // Moderation
+    const moderation = await checkContent(content);
+    if (moderation.flagged) {
+      return res.status(400).json({ error: `Message blocked: ${moderation.reason}` });
+    }
+
+    const result = await query(`
+      INSERT INTO server_chat_messages (server_id, channel_id, author_id, content)
+      VALUES ($1, $2, $3, $4) RETURNING *
+    `, [serverId, channelId, req.user.id, content.trim()]);
+
+    const msg = result.rows[0];
+
+    // Get author info
+    const userResult = await query(
+      'SELECT pseudonym, display_name, avatar_hue FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    const u = userResult.rows[0];
+
+    const message = {
+      id: msg.id,
+      content: msg.content,
+      authorId: msg.author_id,
+      author: u.display_name || u.pseudonym,
+      authorAvatarHue: u.avatar_hue,
+      createdAt: msg.created_at,
+    };
+
+    // Broadcast via socket.io
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`server-channel:${channelId}`).emit('chat:message', message);
+    }
+
+    res.status(201).json({ message });
   } catch (err) {
     next(err);
   }

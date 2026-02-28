@@ -250,6 +250,16 @@ CREATE TABLE IF NOT EXISTS server_post_replies (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ─── Server Chat Messages (real-time channel chat) ──
+CREATE TABLE IF NOT EXISTS server_chat_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  server_id UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+  channel_id UUID NOT NULL REFERENCES server_channels(id) ON DELETE CASCADE,
+  author_id UUID NOT NULL REFERENCES users(id),
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ─── Authority Assignments ──────────────────────────
 -- Links authority users to specific categories + hierarchy levels
 CREATE TABLE IF NOT EXISTS authority_assignments (
@@ -281,6 +291,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at
 CREATE INDEX IF NOT EXISTS idx_server_posts_channel ON server_posts(channel_id);
 CREATE INDEX IF NOT EXISTS idx_server_posts_server ON server_posts(server_id);
 CREATE INDEX IF NOT EXISTS idx_server_post_replies_post ON server_post_replies(post_id);
+CREATE INDEX IF NOT EXISTS idx_server_chat_channel ON server_chat_messages(channel_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_authority_user ON authority_assignments(user_id);
 CREATE INDEX IF NOT EXISTS idx_authority_category ON authority_assignments(category, hierarchy_level);
 

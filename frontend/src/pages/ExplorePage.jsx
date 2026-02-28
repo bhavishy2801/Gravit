@@ -164,7 +164,7 @@ export default function ExplorePage() {
                         <input
                             type="text"
                             value={inviteCode}
-                            onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                            onChange={(e) => setInviteCode(e.target.value)}
                             placeholder="Invite Code"
                             maxLength={8}
                             style={{
