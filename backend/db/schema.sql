@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS users (
   programme VARCHAR(30),
   department VARCHAR(100),
   role VARCHAR(20) NOT NULL DEFAULT 'student'
-    CHECK (role IN ('student', 'moderator', 'admin')),
+    CHECK (role IN ('student', 'moderator', 'admin', 'authority')),
   institution_id UUID REFERENCES institutions(id),
   avatar_hue INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -225,6 +225,17 @@ CREATE TABLE IF NOT EXISTS server_channels (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ─── Authority Assignments ──────────────────────────
+-- Links authority users to specific categories + hierarchy levels
+CREATE TABLE IF NOT EXISTS authority_assignments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  category VARCHAR(50) NOT NULL,
+  hierarchy_level INTEGER NOT NULL DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, category)
+);
+
 -- ─── Indexes ────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_posts_channel ON posts(channel_id);
 CREATE INDEX IF NOT EXISTS idx_posts_state ON posts(state);
@@ -242,3 +253,5 @@ CREATE INDEX IF NOT EXISTS idx_channel_reads_user ON channel_reads(user_id);
 CREATE INDEX IF NOT EXISTS idx_otp_phone ON otp_codes(phone, purpose);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_authority_user ON authority_assignments(user_id);
+CREATE INDEX IF NOT EXISTS idx_authority_category ON authority_assignments(category, hierarchy_level);

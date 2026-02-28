@@ -40,6 +40,11 @@ export default function Dashboard() {
     const [escalations, setEscalations] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    // Authority-specific state
+    const [authorityPosts, setAuthorityPosts] = useState([]);
+    const [authorityAssignments, setAuthorityAssignments] = useState([]);
+    const [isAuthority, setIsAuthority] = useState(false);
+
     useEffect(() => {
         async function fetchDashboard() {
             try {
@@ -51,6 +56,16 @@ export default function Dashboard() {
                 setStats(statsRes.data.stats);
                 setLeaderboard(leaderboardRes.data.leaderboard);
                 setEscalations(escalationsRes.data.posts);
+
+                // Try fetching authority-scoped posts (fails gracefully for non-authorities)
+                try {
+                    const authRes = await api.get('/authorities/posts');
+                    if (authRes.data.assignments?.length > 0) {
+                        setIsAuthority(true);
+                        setAuthorityPosts(authRes.data.posts);
+                        setAuthorityAssignments(authRes.data.assignments);
+                    }
+                } catch { /* not an authority – ignore */ }
             } catch (err) {
                 console.error('Failed to load dashboard:', err);
             } finally {
@@ -104,7 +119,111 @@ export default function Dashboard() {
                 overflowY: 'auto',
                 padding: '24px',
             }}>
-                {/* Stats grid */}
+                {/* Authority Panel — only shown for authority users */}
+                {isAuthority && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        style={{
+                            background: 'linear-gradient(135deg, rgba(218,55,60,0.08), rgba(240,178,50,0.06))',
+                            border: '1px solid rgba(218,55,60,0.2)',
+                            borderRadius: '12px',
+                            padding: '20px',
+                            marginBottom: '24px',
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                            <Shield size={20} color="#da373c" />
+                            <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#f2f3f5', margin: 0 }}>
+                                Your Authority Dashboard
+                            </h2>
+                        </div>
+
+                        {/* Assigned categories */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
+                            {authorityAssignments.map((a, i) => (
+                                <span key={i} style={{
+                                    padding: '4px 12px',
+                                    borderRadius: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    background: 'rgba(88,101,242,0.15)',
+                                    color: '#7289da',
+                                }}>
+                                    📍 {a.category} — Level {a.hierarchyLevel}
+                                </span>
+                            ))}
+                        </div>
+
+                        {/* Posts needing attention */}
+                        {authorityPosts.length === 0 ? (
+                            <div style={{ fontSize: '13px', color: '#23a559', fontWeight: 600 }}>
+                                ✅ No pending grievances in your assigned categories!
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                <span style={{ fontSize: '12px', color: '#949ba4', fontWeight: 600, marginBottom: '4px' }}>
+                                    {authorityPosts.length} post{authorityPosts.length !== 1 ? 's' : ''} needing your attention:
+                                </span>
+                                {authorityPosts.slice(0, 10).map((post) => (
+                                    <motion.div
+                                        key={post.id}
+                                        whileHover={{ background: 'rgba(255,255,255,0.04)' }}
+                                        onClick={() => navigate(`/posts/${post.id}`)}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '10px',
+                                            padding: '10px 12px',
+                                            borderRadius: '6px',
+                                            cursor: 'pointer',
+                                            background: 'rgba(255,255,255,0.02)',
+                                        }}
+                                    >
+                                        {/* State badge */}
+                                        <span style={{
+                                            padding: '2px 8px',
+                                            borderRadius: '4px',
+                                            fontSize: '10px',
+                                            fontWeight: 700,
+                                            textTransform: 'uppercase',
+                                            flexShrink: 0,
+                                            background: post.state === 'escalated' ? 'rgba(218,55,60,0.2)' :
+                                                post.state === 'trending' ? 'rgba(240,178,50,0.2)' : 'rgba(88,101,242,0.15)',
+                                            color: post.state === 'escalated' ? '#da373c' :
+                                                post.state === 'trending' ? '#f0b232' : '#7289da',
+                                        }}>
+                                            {post.state}
+                                        </span>
+
+                                        {/* Title */}
+                                        <span style={{
+                                            fontSize: '14px',
+                                            fontWeight: 500,
+                                            color: '#f2f3f5',
+                                            flex: 1,
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                        }}>
+                                            {post.title}
+                                        </span>
+
+                                        {/* Channel + urgency */}
+                                        <span style={{ fontSize: '11px', color: '#949ba4', flexShrink: 0 }}>
+                                            #{post.channelName} · ⚡{post.urgencyScore}
+                                        </span>
+                                    </motion.div>
+                                ))}
+                                {authorityPosts.length > 10 && (
+                                    <span style={{ fontSize: '12px', color: '#949ba4', textAlign: 'center', padding: '4px' }}>
+                                        +{authorityPosts.length - 10} more...
+                                    </span>
+                                )}
+                            </div>
+                        )}
+                    </motion.div>
+                )}
                 <div style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',

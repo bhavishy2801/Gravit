@@ -390,6 +390,23 @@ router.post('/:id/upvote', authenticate, async (req, res, next) => {
         responseWindowHours: hours,
       });
       newState = updated.state;
+
+      // Notify the authority assigned to this category + level
+      const postTitleResult = await query('SELECT title FROM posts WHERE id = $1', [postId]);
+      const postTitle = postTitleResult.rows[0]?.title?.substring(0, 80) || 'Untitled';
+
+      const assignedAuthority = await query(
+        'SELECT user_id FROM authority_assignments WHERE category = $1 AND hierarchy_level = $2',
+        [category, 1]
+      );
+      for (const auth of assignedAuthority.rows) {
+        await query(
+          `INSERT INTO notifications (user_id, type, title, message, link) VALUES ($1, $2, $3, $4, $5)`,
+          [auth.user_id, 'escalation', '⚠️ Post escalated to you',
+          `"${postTitle}" in ${category} needs your attention (${hours}h to respond).`,
+          `/posts/${postId}`]
+        );
+      }
     }
 
     // Get updated upvote count
