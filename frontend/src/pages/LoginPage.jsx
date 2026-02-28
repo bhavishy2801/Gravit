@@ -18,26 +18,6 @@ export default function LoginPage() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    // Redirect if already logged in
-    if (user) {
-        navigate('/channels/curriculum', { replace: true });
-        return null;
-    }
-
-    const handleEmailLogin = async (e) => {
-        e.preventDefault();
-        setError('');
-        setLoading(true);
-        try {
-            await loginWithEmail(email, password);
-            navigate('/channels/curriculum');
-        } catch (err) {
-            setError(err.response?.data?.error || 'Login failed');
-        } finally {
-            setLoading(false);
-        }
-    };
-
     // ─── Google Sign-In via renderButton (avoids FedCM) ─────
     const googleBtnRef = useRef(null);
     const googleInitialized = useRef(false);
@@ -91,6 +71,25 @@ export default function LoginPage() {
             return () => clearInterval(interval);
         }
     }, [tab, initializeGoogle]);
+
+    // Redirect if already logged in (must be after all hooks)
+    useEffect(() => {
+        if (user) navigate('/channels/curriculum', { replace: true });
+    }, [user, navigate]);
+
+    const handleEmailLogin = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+        try {
+            await loginWithEmail(email, password);
+            navigate('/channels/curriculum');
+        } catch (err) {
+            setError(err.response?.data?.error || 'Login failed');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleSendOTP = async () => {
         setError('');

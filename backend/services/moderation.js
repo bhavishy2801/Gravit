@@ -1,10 +1,81 @@
 // ─── AI Content Moderation Service ─────────────────────
-// Uses OpenAI's free Moderation API to detect abusive content.
-// Fail-open: if OPENAI_API_KEY is missing or the API errors,
-// content is allowed through so the system never breaks.
+// Two-layer approach:
+//   1. Built-in keyword filter (always active, zero cost)
+//   2. OpenAI Moderation API (if OPENAI_API_KEY is set)
 // ────────────────────────────────────────────────────────
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+// ─── Built-in profanity / slur word list ────────────────
+// Covers common English profanity, slurs, and abusive terms.
+// Stored lowercase. Matching is done on word boundaries to
+// avoid false positives (e.g. "class" won't match "ass").
+const PROFANITY_LIST = [
+  // Strong profanity
+  'fuck', 'fucking', 'fucked', 'fucker', 'fuckers', 'motherfucker', 'motherfucking',
+  'shit', 'shitty', 'bullshit', 'shitting',
+  'ass', 'asshole', 'arsehole', 'arse',
+  'bitch', 'bitches', 'bitching',
+  'damn', 'damned', 'dammit', 'goddamn', 'goddammit',
+  'dick', 'dickhead',
+  'cock', 'cocksucker',
+  'cunt', 'cunts',
+  'bastard', 'bastards',
+  'piss', 'pissed', 'pissing',
+  'crap', 'crappy',
+  'whore', 'slut', 'sluts',
+  // Slurs & hate speech
+  'nigger', 'nigga', 'niggers',
+  'faggot', 'fag', 'fags', 'faggots',
+  'retard', 'retarded', 'retards',
+  'tranny', 'trannies',
+  'chink', 'chinks',
+  'spic', 'spics',
+  'kike', 'kikes',
+  'wetback',
+  'beaner',
+  'gook',
+  'dyke', 'dykes',
+  // Threats / violence
+  'kill yourself', 'kys',
+  // Hindi / common desi profanity
+  'madarchod', 'mc', 'bc', 'behenchod', 'bhenchod',
+  'chutiya', 'chutiye', 'gandu', 'gaandu',
+  'bhosdike', 'bsdk', 'bhosdiwale',
+  'laude', 'lavde', 'lodu', 'lode',
+  'randi', 'raand',
+  'harami', 'haramkhor',
+  'saala', 'saale', 'sala', 'sale',
+  'kamina', 'kamine',
+  'jhatu', 'jhaatu',
+  'tatti', 'haggu',
+  'kutte', 'kutta', 'kutiya',
+  'suar', 'suwar',
+  'ullu',
+];
+
+// Build a single regex from the word list for efficient matching
+const PROFANITY_REGEX = new RegExp(
+  '\\b(' + PROFANITY_LIST.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')\\b',
+  'i'
+);
+
+/**
+ * Check text against the built-in profanity word list.
+ * @param {string} text
+ * @returns {{ flagged: boolean, categories: string[], reason: string }}
+ */
+function checkBuiltInFilter(text) {
+  const match = text.match(PROFANITY_REGEX);
+  if (match) {
+    return {
+      flagged: true,
+      categories: ['Profanity / Abuse'],
+      reason: 'Your message contains inappropriate language that is not allowed.',
+    };
+  }
+  return { flagged: false, categories: [], reason: '' };
+}
 
 const CATEGORY_LABELS = {
     'harassment': 'Harassment',
@@ -21,12 +92,18 @@ const CATEGORY_LABELS = {
 };
 
 /**
- * Check text content against OpenAI's Moderation API.
+ * Check text content for inappropriate language.
+ * Layer 1: Built-in keyword filter (always runs).
+ * Layer 2: OpenAI Moderation API (if key is configured).
  * @param {string} text - The text to check.
  * @returns {{ flagged: boolean, categories: string[], reason: string }}
  */
 export async function checkContent(text) {
-    // If no API key, skip moderation (fail-open)
+    // Layer 1 — built-in filter (always active)
+    const builtIn = checkBuiltInFilter(text);
+    if (builtIn.flagged) return builtIn;
+
+    // Layer 2 — OpenAI (if configured)
     if (!OPENAI_API_KEY) {
         return { flagged: false, categories: [], reason: '' };
     }

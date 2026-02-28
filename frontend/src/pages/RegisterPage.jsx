@@ -14,12 +14,6 @@ export default function RegisterPage() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    // Redirect if already logged in
-    if (user) {
-        navigate('/channels/curriculum', { replace: true });
-        return null;
-    }
-
     const handleChange = (field) => (e) => {
         setForm(prev => ({ ...prev, [field]: e.target.value }));
     };
@@ -97,6 +91,11 @@ export default function RegisterPage() {
             return () => clearInterval(interval);
         }
     }, [initializeGoogle]);
+
+    // Redirect if already logged in (must be after all hooks)
+    useEffect(() => {
+        if (user) navigate('/channels/curriculum', { replace: true });
+    }, [user, navigate]);
 
     return (
         <div style={{
