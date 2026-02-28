@@ -9,6 +9,7 @@ import ChannelFeed from './pages/ChannelFeed';
 import PostDetail from './pages/PostDetail';
 import Dashboard from './pages/Dashboard';
 import ProfilePage from './pages/ProfilePage';
+import NotificationsPage from './pages/NotificationsPage';
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
               <Route path="/posts/:postId" element={<PostDetail />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/notifications" element={<NotificationsPage />} />
             </Route>
 
             {/* Default redirect */}

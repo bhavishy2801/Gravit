@@ -111,6 +111,17 @@ router.post('/:postId', authenticate, async (req, res, next) => {
       [postId]
     );
 
+    // Notify post author about new comment
+    const postInfo = await query('SELECT author_id, title FROM posts WHERE id = $1', [postId]);
+    const postAuthorId = postInfo.rows[0]?.author_id;
+    if (postAuthorId && postAuthorId !== req.user.id) {
+      const postTitle = postInfo.rows[0].title.substring(0, 80);
+      await query(
+        `INSERT INTO notifications (user_id, type, title, message, link) VALUES ($1, $2, $3, $4, $5)`,
+        [postAuthorId, 'comment', 'New comment on your post', `Someone commented on "${postTitle}".`, `/posts/${postId}`]
+      );
+    }
+
     const comment = result.rows[0];
     const userResult = await query('SELECT pseudonym, avatar_hue FROM users WHERE id = $1', [req.user.id]);
     const author = userResult.rows[0];

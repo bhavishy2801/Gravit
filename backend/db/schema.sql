@@ -165,6 +165,19 @@ CREATE TABLE IF NOT EXISTS otp_codes (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ─── Notifications ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type VARCHAR(30) NOT NULL DEFAULT 'general'
+    CHECK (type IN ('upvote', 'comment', 'escalation', 'resolution', 'mention', 'general')),
+  title VARCHAR(255) NOT NULL,
+  message TEXT,
+  link VARCHAR(500),
+  is_read BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ─── Indexes ────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_posts_channel ON posts(channel_id);
 CREATE INDEX IF NOT EXISTS idx_posts_state ON posts(state);
@@ -180,3 +193,5 @@ CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
 CREATE INDEX IF NOT EXISTS idx_users_google ON users(google_id);
 CREATE INDEX IF NOT EXISTS idx_channel_reads_user ON channel_reads(user_id);
 CREATE INDEX IF NOT EXISTS idx_otp_phone ON otp_codes(phone, purpose);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC);

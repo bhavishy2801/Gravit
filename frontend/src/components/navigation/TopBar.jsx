@@ -1,7 +1,25 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Hash, Search, Bell, HelpCircle, Users, Menu } from 'lucide-react';
 import { motion } from 'framer-motion';
+import api from '../../services/api';
 
 export default function TopBar({ channelName = 'general', description = '', onMenuClick }) {
+    const navigate = useNavigate();
+    const [unreadCount, setUnreadCount] = useState(0);
+
+    useEffect(() => {
+        async function fetchUnread() {
+            try {
+                const res = await api.get('/notifications/unread-count');
+                setUnreadCount(res.data.count);
+            } catch { /* ignore */ }
+        }
+        fetchUnread();
+        const interval = setInterval(fetchUnread, 30000); // poll every 30s
+        return () => clearInterval(interval);
+    }, []);
+
     return (
         <div style={{
             height: '48px',
@@ -84,29 +102,34 @@ export default function TopBar({ channelName = 'general', description = '', onMe
                     <Search size={14} color="#949ba4" />
                 </div>
 
+                {/* Notifications bell — navigates to /notifications */}
                 <motion.button
                     whileHover={{ scale: 1.1, color: '#f2f3f5' }}
-                    style={{ display: 'flex', color: '#b5bac1', position: 'relative' }}
+                    onClick={() => navigate('/notifications')}
+                    style={{ display: 'flex', color: '#b5bac1', position: 'relative', background: 'none', border: 'none', cursor: 'pointer' }}
                     title="Notifications"
                 >
                     <Bell size={20} />
-                    <span style={{
-                        position: 'absolute',
-                        top: '-4px',
-                        right: '-6px',
-                        width: '16px',
-                        height: '16px',
-                        borderRadius: '50%',
-                        background: '#da373c',
-                        fontSize: '10px',
-                        fontWeight: 700,
-                        color: '#fff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                    }}>
-                        3
-                    </span>
+                    {unreadCount > 0 && (
+                        <span style={{
+                            position: 'absolute',
+                            top: '-4px',
+                            right: '-6px',
+                            minWidth: '16px',
+                            height: '16px',
+                            borderRadius: '50%',
+                            background: '#da373c',
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            color: '#fff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '0 3px',
+                        }}>
+                            {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                    )}
                 </motion.button>
 
                 <motion.button
@@ -121,3 +144,4 @@ export default function TopBar({ channelName = 'general', description = '', onMe
         </div>
     );
 }
+

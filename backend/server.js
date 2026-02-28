@@ -23,6 +23,7 @@ import commentRoutes from './routes/comments.js';
 import channelRoutes from './routes/channels.js';
 import dashboardRoutes from './routes/dashboard.js';
 import userRoutes from './routes/users.js';
+import notificationRoutes from './routes/notifications.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -67,6 +68,7 @@ app.use('/api/comments', commentRoutes);
 app.use('/api/channels', channelRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

@@ -312,6 +312,17 @@ router.post('/:id/upvote', authenticate, async (req, res, next) => {
       await query('INSERT INTO upvotes (user_id, post_id) VALUES ($1, $2)', [userId, postId]);
       await query('UPDATE posts SET upvote_count = upvote_count + 1 WHERE id = $1', [postId]);
       upvoted = true;
+
+      // Notify post author about upvote
+      const postAuthor = await query('SELECT author_id, title FROM posts WHERE id = $1', [postId]);
+      const authorId = postAuthor.rows[0]?.author_id;
+      if (authorId && authorId !== userId) {
+        const postTitle = postAuthor.rows[0].title.substring(0, 80);
+        await query(
+          `INSERT INTO notifications (user_id, type, title, message, link) VALUES ($1, $2, $3, $4, $5)`,
+          [authorId, 'upvote', 'Your post got an upvote!', `"${postTitle}" received an upvote.`, `/posts/${postId}`]
+        );
+      }
     }
 
     // Recalculate urgency score
