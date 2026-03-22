@@ -1,4 +1,8 @@
-# Gravit — Enforcing Accountability in Student Grievance Redressal
+<div align="center">
+  <img src="assets/gravit.png" alt="Gravit" width="200" />
+</div>
+
+# Gravit
 **Platform:** Gravit <br>
 **Theme:** B — Rethinking the System <br>
  **Team:** Cucklers <br>
